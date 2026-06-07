@@ -982,6 +982,141 @@ section { position: relative; }
    ============================================================ */
 #tweaks-root { position: fixed; z-index: 120; }
 
+/* ============================================================
+   BOOKING MODAL
+   ============================================================ */
+.booking-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(23,21,14,.6); backdrop-filter: blur(4px);
+  display: grid; place-items: center; padding: 20px;
+  animation: bmFadeIn .2s ease;
+}
+@keyframes bmFadeIn { from { opacity:0 } }
+
+.booking-modal {
+  background: var(--paper); border-radius: 24px;
+  box-shadow: 0 32px 80px rgba(23,21,14,.35);
+  width: 100%; max-width: 540px; max-height: 92vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: bmSlideUp .28s cubic-bezier(.4,0,.2,1);
+}
+@keyframes bmSlideUp { from { opacity:0; transform:translateY(20px) } }
+
+.bm-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 28px 0; flex-shrink: 0;
+}
+.bm-header h2 { font-family: var(--serif); font-size: clamp(1.3rem,3vw,1.7rem); font-weight:400; }
+.bm-close {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1.5px solid var(--line); display: grid; place-items: center;
+  color: var(--muted); cursor:pointer; transition: all .2s;
+  font-size: 20px; line-height:1; background:transparent;
+}
+.bm-close:hover { background: var(--paper-2); color: var(--ink); }
+
+.bm-summary {
+  margin: 16px 28px 0;
+  padding: 14px 18px; border-radius: 14px;
+  background: var(--ink); color: var(--paper);
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.bm-sum-icon { font-size: 1.4rem; flex-shrink:0; margin-top:2px; }
+.bm-sum-title { font-family: var(--serif); font-size: 1.05rem; font-weight:400; }
+.bm-sum-meta { font-size: 13px; color: rgba(237,230,214,.6); margin-top: 4px; }
+.bm-sum-price { font-size: 14px; font-weight:700; margin-top:6px; color: var(--accent); }
+
+.bm-body { padding: 20px 28px; overflow-y: auto; flex:1; }
+.bm-body .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+.bm-body .form-row.full { grid-template-columns:1fr; }
+.bm-field { display:flex; flex-direction:column; gap:5px; margin-bottom:12px; }
+.bm-field label { font-size:12.5px; font-weight:700; color:var(--ink); letter-spacing:.02em; }
+.bm-field .req { color: var(--accent); }
+.bm-input, .bm-select {
+  padding: 11px 14px; border: 1.5px solid var(--line);
+  border-radius: 10px; background: #fff; font-family: var(--sans);
+  font-size: 14px; color: var(--ink); transition: border-color .2s;
+  width:100%;
+}
+.bm-input:focus, .bm-select:focus { outline:none; border-color: var(--ink); }
+.bm-input::placeholder { color: var(--muted-2); }
+
+.bm-payment { margin-top: 4px; }
+.bm-payment label { font-size:12.5px; font-weight:700; color:var(--ink); margin-bottom:8px; display:block; }
+.bm-pay-opts { display:flex; gap:8px; flex-wrap:wrap; }
+.bm-pay-opt { display:none; }
+.bm-pay-opt + span {
+  padding: 8px 15px; border-radius: 100px; border: 1.5px solid var(--line);
+  font-size: 13px; font-weight:600; cursor:pointer; color: var(--muted);
+  transition: all .2s; white-space:nowrap;
+}
+.bm-pay-opt:checked + span { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+.bm-microcopy {
+  display:flex; align-items:center; gap:7px;
+  font-size:12.5px; color:var(--muted); margin-top:6px;
+}
+.bm-microcopy svg { width:14px; height:14px; flex-shrink:0; }
+
+.bm-footer {
+  padding: 16px 28px 24px; flex-shrink:0;
+  border-top: 1.5px solid var(--line); background: var(--paper-2);
+}
+.bm-submit {
+  width:100%; padding: 15px; border-radius: 12px;
+  background: var(--accent); color: #fff;
+  font-family: var(--sans); font-size: 15px; font-weight:700;
+  cursor:pointer; border:none; transition: background .2s, transform .25s var(--ease);
+  display:flex; align-items:center; justify-content:center; gap:8px;
+}
+.bm-submit:hover { background: var(--accent-deep); }
+.bm-submit:active { transform: scale(.98); }
+.bm-submit:disabled { opacity:.55; cursor:not-allowed; }
+
+/* Success state */
+.bm-success {
+  padding: 48px 28px 36px; text-align:center;
+  display:flex; flex-direction:column; align-items:center; gap:16px;
+}
+.bm-success-icon {
+  width: 64px; height:64px; border-radius:50%;
+  background: #DCFCE7; display:grid; place-items:center;
+}
+.bm-success-icon svg { width:30px; height:30px; color:#16A34A; }
+.bm-success h2 { font-family:var(--serif); font-size:1.6rem; font-weight:400; }
+.bm-success p { font-size:14.5px; color:var(--muted); max-width:34ch; line-height:1.6; }
+.bm-success-ref {
+  background:var(--paper-2); border: 1.5px solid var(--line);
+  border-radius:12px; padding:14px 20px; width:100%; text-align:center;
+}
+.bm-success-ref .ref-label { font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.bm-success-ref .ref-num { font-family:var(--serif); font-size:1.4rem; margin-top:4px; }
+.bm-success-actions { display:flex; gap:10px; width:100%; }
+
+/* Loading skeleton for kursus.html */
+.kursus-loading {
+  min-height: 80vh; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:20px; color:var(--muted);
+}
+.kl-spinner {
+  width:40px; height:40px; border:3px solid var(--line);
+  border-top-color:var(--accent); border-radius:50%;
+  animation: klSpin .7s linear infinite;
+}
+@keyframes klSpin { to { transform: rotate(360deg); } }
+
+.kursus-error {
+  min-height: 70vh; display:grid; place-items:center; text-align:center; padding:40px 20px;
+}
+.kursus-error h2 { font-family:var(--serif); font-size:2rem; font-weight:400; margin-bottom:12px; }
+.kursus-error p { color:var(--muted); margin-bottom:24px; }
+
+@media(max-width:600px) {
+  .booking-modal { border-radius: 20px 20px 0 0; max-height: 96vh; }
+  .booking-overlay { align-items: flex-end; padding: 0; }
+  .bm-body .form-row { grid-template-columns: 1fr; }
+}
+
 /* reduced motion */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }

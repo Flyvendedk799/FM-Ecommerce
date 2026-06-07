@@ -6,8 +6,8 @@
   'use strict';
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* ============ DATA ============ */
-  const CATS = {
+  /* ============ DATA (static fallback — overridden by API) ============ */
+  let CATS = {
     ledelse: { label: 'Ledelse & Kommunikation', accent: '#FF5A1F', bg: '#2C1A0A', desc: 'Bliv en stærkere leder, kommunikator og forhandler. Kurser for alle niveauer.', count: 48 },
     it:      { label: 'IT & Data',                accent: '#3A6FF8', bg: '#0D1A38', desc: 'Excel, Power BI, Python og alt det digitale. Fra begynder til ekspert.', count: 62 },
     cert:    { label: 'Certificering',            accent: '#6B4DE0', bg: '#1E0E3C', desc: 'PRINCE2, ITIL og andre internationalt anerkendte certifikater.', count: 31 },
@@ -16,22 +16,22 @@
     salg:    { label: 'Salg & Kundeservice',      accent: '#C9A227', bg: '#2E1A0A', desc: 'Sælg bedre, betjen kunder professionelt og byg stærke relationer.', count: 39 }
   };
 
-  const COURSES = [
-    { id:1,  cat:'ledelse', title:'Forhandlingsteknik',          supplier:'Competence Way',      rating:4.8, reviews:312,  dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#2C1A0A', url:'Forhandlingsteknik.html' },
-    { id:2,  cat:'ledelse', title:'Præsentationsteknik',         supplier:'Waltersdorff Consulting', rating:4.9, reviews:287, dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#1F3A2E', url:'#' },
-    { id:3,  cat:'ledelse', title:'Konflikthåndtering',          supplier:'Competence Way',      rating:4.7, reviews:198,  dur:'1 dag',           format:'Fysisk',  online:false, price:6500,  color:'#3A2C19', url:'#' },
-    { id:4,  cat:'ledelse', title:'Personlig gennemslagskraft',  supplier:'Waltersdorff Consulting', rating:4.8, reviews:241, dur:'2 dage',          format:'Fysisk',  online:true,  price:9900,  color:'#2A1F14', url:'#' },
-    { id:5,  cat:'it',      title:'Excel — Avanceret',           supplier:'DataSkolen',          rating:4.8, reviews:445,  dur:'2 dage',          format:'Fysisk',  online:true,  price:8900,  color:'#0D1A38', url:'#' },
-    { id:6,  cat:'it',      title:'Power BI Dashboard',          supplier:'DataSkolen',          rating:4.7, reviews:223,  dur:'1 dag',           format:'Online',  online:true,  price:5900,  color:'#1F2E42', url:'#' },
-    { id:7,  cat:'it',      title:'Python for Professionals',    supplier:'CodeDanmark',         rating:4.6, reviews:189,  dur:'3 dage',          format:'Fysisk',  online:true,  price:12900, color:'#1A1F35', url:'#' },
-    { id:8,  cat:'cert',    title:'PRINCE2® Foundation',         supplier:'PM Academy',          rating:4.9, reviews:521,  dur:'3 dage + eksamen',format:'Fysisk',  online:true,  price:14900, color:'#1E0E3C', url:'#', badge:'cert' },
-    { id:9,  cat:'cert',    title:'ITIL® 4 Foundation',          supplier:'PM Academy',          rating:4.8, reviews:412,  dur:'2 dage + eksamen',format:'Fysisk',  online:true,  price:11900, color:'#160A2C', url:'#', badge:'cert' },
-    { id:10, cat:'sundhed', title:'Førstehjælp & HLR',           supplier:'Dansk Røde Kors',     rating:4.9, reviews:1240, dur:'1 dag',           format:'Fysisk',  online:false, price:3200,  color:'#0E2A1C', url:'#' },
-    { id:11, cat:'sundhed', title:'Psykisk Førstehjælp',         supplier:'Mind Danmark',        rating:4.7, reviews:387,  dur:'1 dag',           format:'Fysisk',  online:true,  price:4500,  color:'#1F2E22', url:'#' },
-    { id:12, cat:'amu',     title:'Kloakmester (AMU)',           supplier:'TechErhverv',         rating:4.6, reviews:156,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#2E1208', url:'#', badge:'amu' },
-    { id:13, cat:'amu',     title:'Svejsning MIG/MAG (AMU)',     supplier:'TechErhverv',         rating:4.8, reviews:203,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#201208', url:'#', badge:'amu' },
-    { id:14, cat:'salg',    title:'Salgspsykologi & Indvendinger',supplier:'Competence Way',     rating:4.8, reviews:334,  dur:'1 dag',           format:'Fysisk',  online:true,  price:7200,  color:'#2E1A0A', url:'#' },
-    { id:15, cat:'salg',    title:'Telefonist & Kundeservice',   supplier:'ServiceAkademiet',    rating:4.6, reviews:278,  dur:'1 dag',           format:'Fysisk',  online:true,  price:5900,  color:'#261408', url:'#' }
+  let COURSES = [
+    { id:1,  cat:'ledelse', title:'Forhandlingsteknik',          supplier:'Competence Way',      rating:4.8, reviews:312,  dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#2C1A0A', url:'kursus.html?id=1' },
+    { id:2,  cat:'ledelse', title:'Præsentationsteknik',         supplier:'Waltersdorff Consulting', rating:4.9, reviews:287, dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#1F3A2E', url:'kursus.html?id=2' },
+    { id:3,  cat:'ledelse', title:'Konflikthåndtering',          supplier:'Competence Way',      rating:4.7, reviews:198,  dur:'1 dag',           format:'Fysisk',  online:false, price:6500,  color:'#3A2C19', url:'kursus.html?id=3' },
+    { id:4,  cat:'ledelse', title:'Personlig gennemslagskraft',  supplier:'Waltersdorff Consulting', rating:4.8, reviews:241, dur:'2 dage',          format:'Fysisk',  online:true,  price:9900,  color:'#2A1F14', url:'kursus.html?id=4' },
+    { id:5,  cat:'it',      title:'Excel — Avanceret',           supplier:'DataSkolen',          rating:4.8, reviews:445,  dur:'2 dage',          format:'Fysisk',  online:true,  price:8900,  color:'#0D1A38', url:'kursus.html?id=5' },
+    { id:6,  cat:'it',      title:'Power BI Dashboard',          supplier:'DataSkolen',          rating:4.7, reviews:223,  dur:'1 dag',           format:'Online',  online:true,  price:5900,  color:'#1F2E42', url:'kursus.html?id=6' },
+    { id:7,  cat:'it',      title:'Python for Professionals',    supplier:'CodeDanmark',         rating:4.6, reviews:189,  dur:'3 dage',          format:'Fysisk',  online:true,  price:12900, color:'#1A1F35', url:'kursus.html?id=7' },
+    { id:8,  cat:'cert',    title:'PRINCE2® Foundation',         supplier:'PM Academy',          rating:4.9, reviews:521,  dur:'3 dage + eksamen',format:'Fysisk',  online:true,  price:14900, color:'#1E0E3C', url:'kursus.html?id=8', badge:'cert' },
+    { id:9,  cat:'cert',    title:'ITIL® 4 Foundation',          supplier:'PM Academy',          rating:4.8, reviews:412,  dur:'2 dage + eksamen',format:'Fysisk',  online:true,  price:11900, color:'#160A2C', url:'kursus.html?id=9', badge:'cert' },
+    { id:10, cat:'sundhed', title:'Førstehjælp & HLR',           supplier:'Dansk Røde Kors',     rating:4.9, reviews:1240, dur:'1 dag',           format:'Fysisk',  online:false, price:3200,  color:'#0E2A1C', url:'kursus.html?id=10' },
+    { id:11, cat:'sundhed', title:'Psykisk Førstehjælp',         supplier:'Mind Danmark',        rating:4.7, reviews:387,  dur:'1 dag',           format:'Fysisk',  online:true,  price:4500,  color:'#1F2E22', url:'kursus.html?id=11' },
+    { id:12, cat:'amu',     title:'Kloakmester (AMU)',           supplier:'TechErhverv',         rating:4.6, reviews:156,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#2E1208', url:'kursus.html?id=12', badge:'amu' },
+    { id:13, cat:'amu',     title:'Svejsning MIG/MAG (AMU)',     supplier:'TechErhverv',         rating:4.8, reviews:203,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#201208', url:'kursus.html?id=13', badge:'amu' },
+    { id:14, cat:'salg',    title:'Salgspsykologi & Indvendinger',supplier:'Competence Way',     rating:4.8, reviews:334,  dur:'1 dag',           format:'Fysisk',  online:true,  price:7200,  color:'#2E1A0A', url:'kursus.html?id=14' },
+    { id:15, cat:'salg',    title:'Telefonist & Kundeservice',   supplier:'ServiceAkademiet',    rating:4.6, reviews:278,  dur:'1 dag',           format:'Fysisk',  online:true,  price:5900,  color:'#261408', url:'kursus.html?id=15' }
   ];
 
   /* ============ STATE ============ */
@@ -320,16 +320,63 @@
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
-  window.addEventListener('hashchange', route);
-  route();
+  /* ============ INIT — fetch live data from API ============ */
+  function init() {
+    Promise.all([
+      fetch('/api/categories').then(function(r) { return r.ok ? r.json() : null; }),
+      fetch('/api/courses?status=active').then(function(r) { return r.ok ? r.json() : null; })
+    ]).then(function(results) {
+      var catsArr   = results[0];
+      var coursesArr = results[1];
 
-  // footer kat-nav-link global (for overview state too)
-  document.querySelectorAll('.kat-nav-link').forEach(function(a) {
-    a.addEventListener('click', function(e) {
-      e.preventDefault();
-      window.location.hash = a.getAttribute('href').slice(1);
-      window.scrollTo({ top: 0, behavior: 'auto' });
+      if (catsArr && catsArr.length) {
+        CATS = {};
+        catsArr.forEach(function(cat) {
+          CATS[cat.key] = {
+            label:  cat.label,
+            accent: cat.accent,
+            bg:     cat.bg,
+            desc:   cat.description || '',
+            count:  cat.course_count || 0
+          };
+        });
+      }
+
+      if (coursesArr && coursesArr.length) {
+        COURSES = coursesArr.map(function(c) {
+          return {
+            id:       c.id,
+            cat:      c.category_key,
+            title:    c.title,
+            supplier: c.supplier_name || '',
+            rating:   c.rating || 0,
+            reviews:  c.review_count || 0,
+            dur:      c.duration || '',
+            format:   c.format || 'Fysisk',
+            online:   Boolean(c.is_online),
+            price:    c.price || 0,
+            color:    c.color || '#2C1A0A',
+            badge:    c.badge || null,
+            url:      'kursus.html?id=' + c.id
+          };
+        });
+      }
+    }).catch(function() {
+      // silently fall back to hardcoded data
+    }).finally(function() {
+      window.addEventListener('hashchange', route);
+      route();
+
+      document.querySelectorAll('.kat-nav-link').forEach(function(a) {
+        a.addEventListener('click', function(e) {
+          e.preventDefault();
+          window.location.hash = a.getAttribute('href').slice(1);
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        });
+      });
     });
-  });
+  }
+
+  init();
 
 })();

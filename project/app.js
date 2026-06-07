@@ -49,7 +49,7 @@
   /* ============================================================
      SESSION PICKER
      ============================================================ */
-  const SESSIONS = {
+  let SESSIONS = {
     kbh: [
       { d: '12', m: 'Jun', loc: 'København', venue: 'Tivoli Congress Center', format: 'Fysisk · 1 dag', online: false, seats: 4 },
       { d: '03', m: 'Sep', loc: 'København', venue: 'Tivoli Congress Center', format: 'Fysisk · 1 dag', online: false, seats: 11, popular: true },
@@ -69,7 +69,8 @@
       { d: '29', m: 'Aug', loc: 'Online', venue: 'Live via Zoom', format: 'Online · 1 dag', online: true, seats: 18 }
     ]
   };
-  const MONTH_FULL = { Jun: 'juni', Jul: 'juli', Aug: 'august', Sep: 'september', Okt: 'oktober', Nov: 'november' };
+  const MONTH_FULL = { Jan:'januar', Feb:'februar', Mar:'marts', Apr:'april', Maj:'maj', Jun: 'juni', Jul: 'juli', Aug: 'august', Sep: 'september', Okt: 'oktober', Nov: 'november', Dec:'december' };
+  const LOC_KEY_MAP = { 'København':'kbh', 'Aarhus':'aarhus', 'Odense':'odense', 'Aalborg':'aalborg', 'Online':'online' };
 
   const list = document.getElementById('session-list');
   const tabs = document.querySelectorAll('.loc-tab');
@@ -79,6 +80,7 @@
   const sumScarcity = document.getElementById('sum-scarcity');
   const sbSub = document.getElementById('sb-sub');
   let current = 'kbh';
+  let selectedSessionId = null;
 
   function setScarcity(seats) {
     if (!sumScarcity) return;
@@ -94,6 +96,7 @@
     list.querySelectorAll('.session').forEach(s => s.setAttribute('aria-selected', 'false'));
     card.setAttribute('aria-selected', 'true');
     const dt = card.dataset;
+    selectedSessionId = dt.sessionId ? parseInt(dt.sessionId, 10) : null;
     sumLoc.textContent = dt.loc;
     sumDate.textContent = `${parseInt(dt.day, 10)}. ${MONTH_FULL[dt.month] || dt.month} 2026`;
     sumFormat.textContent = dt.format;
@@ -128,6 +131,7 @@
       el.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
       el.dataset.loc = s.loc; el.dataset.day = s.d; el.dataset.month = s.m;
       el.dataset.format = s.format; el.dataset.online = String(s.online); el.dataset.seats = s.seats;
+      if (s.id) el.dataset.sessionId = s.id;
       const seatTxt = s.seats <= 4
         ? `<span class="low">Kun ${s.seats} pladser</span>`
         : `<b>${s.seats}</b> pladser`;
@@ -156,6 +160,110 @@
     });
   });
   renderLoc('kbh');
+
+  // Fetch live sessions from API and re-render
+  fetch('/api/sessions?course_id=1')
+    .then(r => r.ok ? r.json() : null)
+    .then(function(sessions) {
+      if (!sessions || !sessions.length) return;
+      const built = { kbh:[], aarhus:[], odense:[], aalborg:'contact', online:[] };
+      sessions.forEach(function(s) {
+        const key = LOC_KEY_MAP[s.location] || s.location.toLowerCase().replace(/\s/g, '');
+        if (!built[key] || built[key] === 'contact') built[key] = [];
+        built[key].push({ id: s.id, d: s.day, m: s.month, loc: s.location, venue: s.venue || '', format: s.format, online: Boolean(s.is_online), seats: s.seats, popular: Boolean(s.is_popular) });
+      });
+      // only use aalborg 'contact' if no sessions found there
+      if (!Array.isArray(built.aalborg) || !built.aalborg.length) built.aalborg = 'contact';
+      SESSIONS = built;
+      renderLoc(current);
+    })
+    .catch(function() {});
+
+  /* ============================================================
+     BOOKING MODAL
+     ============================================================ */
+  const bookingOverlay = document.getElementById('booking-overlay');
+  const bookingCta     = document.getElementById('booking-cta');
+
+  function openBookingModal() {
+    if (!bookingOverlay) return;
+    const title = document.getElementById('bm-sum-title');
+    const meta  = document.getElementById('bm-sum-meta');
+    if (title) title.textContent = 'Forhandlingsteknik';
+    if (meta)  meta.textContent  = (sumDate ? sumDate.textContent : '') + ' · ' + (sumLoc ? sumLoc.textContent : '');
+    bookingOverlay.hidden = false;
+    document.body.style.overflow = 'hidden';
+    const nameField = document.getElementById('bm-name');
+    if (nameField) setTimeout(function() { nameField.focus(); }, 50);
+  }
+
+  function closeBookingModal() {
+    if (!bookingOverlay) return;
+    bookingOverlay.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  if (bookingCta) bookingCta.addEventListener('click', openBookingModal);
+
+  if (bookingOverlay) {
+    bookingOverlay.addEventListener('click', function(e) {
+      if (e.target === bookingOverlay) closeBookingModal();
+    });
+
+    document.getElementById('bm-close').addEventListener('click', closeBookingModal);
+
+    document.querySelectorAll('.bm-close-success').forEach(function(btn) {
+      btn.addEventListener('click', closeBookingModal);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && !bookingOverlay.hidden) closeBookingModal();
+    });
+
+    document.getElementById('bm-submit').addEventListener('click', function() {
+      const nameEl  = document.getElementById('bm-name');
+      const emailEl = document.getElementById('bm-email');
+      const name  = nameEl.value.trim();
+      const email = emailEl.value.trim();
+
+      nameEl.style.borderColor  = '';
+      emailEl.style.borderColor = '';
+
+      if (!name) { nameEl.style.borderColor = '#e53e3e'; nameEl.focus(); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { emailEl.style.borderColor = '#e53e3e'; emailEl.focus(); return; }
+
+      const btn = document.getElementById('bm-submit');
+      btn.disabled = true;
+      btn.textContent = 'Sender…';
+
+      const payEl = document.querySelector('input[name="payment"]:checked');
+      fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id:        selectedSessionId,
+          customer_name:     name,
+          customer_email:    email,
+          customer_company:  document.getElementById('bm-company').value.trim(),
+          customer_phone:    document.getElementById('bm-phone').value.trim(),
+          participants:      parseInt(document.getElementById('bm-participants').value, 10),
+          payment_method:    payEl ? payEl.value : 'faktura'
+        })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('bm-confirm-email').textContent = email;
+        document.getElementById('bm-ref-num').textContent = 'FM-' + String(data.id || 0).padStart(4, '0');
+        document.getElementById('bm-form-step').hidden = true;
+        document.getElementById('bm-success-step').hidden = false;
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = 'Reservér plads <span class="arrow">→</span>';
+        alert('Der opstod en fejl. Prøv igen eller ring til os på 77 300 123.');
+      });
+    });
+  }
 
   /* ============================================================
      CURRICULUM accordion + rail fill

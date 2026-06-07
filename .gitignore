@@ -1,0 +1,6 @@
+node_modules/
+backend/futurematch.db-shm
+backend/futurematch.db-wal
+*.db-shm
+*.db-wal
+.DS_Store

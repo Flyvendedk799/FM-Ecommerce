@@ -542,6 +542,107 @@
   </div>
 </div>
 
+<!-- Booking modal -->
+<div class="booking-overlay" id="booking-overlay" hidden>
+  <div class="booking-modal" role="dialog" aria-modal="true" aria-labelledby="bm-title">
+    <!-- Form step -->
+    <div id="bm-form-step">
+      <div class="bm-header">
+        <h2 id="bm-title">Reservér din plads</h2>
+        <button class="bm-close" id="bm-close" aria-label="Luk">×</button>
+      </div>
+      <div class="bm-summary" id="bm-summary">
+        <div class="bm-sum-icon">📅</div>
+        <div>
+          <div class="bm-sum-title" id="bm-sum-title">Forhandlingsteknik</div>
+          <div class="bm-sum-meta" id="bm-sum-meta">Dato &amp; lokation</div>
+          <div class="bm-sum-price" id="bm-sum-price">kr. 6.900 ekskl. moms</div>
+        </div>
+      </div>
+      <form class="bm-body" id="bm-form" novalidate>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-name">Navn <span class="req">*</span></label>
+            <input class="bm-input" id="bm-name" type="text" placeholder="Dit fulde navn" required autocomplete="name">
+          </div>
+          <div class="bm-field">
+            <label for="bm-email">E-mail <span class="req">*</span></label>
+            <input class="bm-input" id="bm-email" type="email" placeholder="din@mail.dk" required autocomplete="email">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-company">Virksomhed</label>
+            <input class="bm-input" id="bm-company" type="text" placeholder="Virksomhedens navn" autocomplete="organization">
+          </div>
+          <div class="bm-field">
+            <label for="bm-phone">Telefon</label>
+            <input class="bm-input" id="bm-phone" type="tel" placeholder="12 34 56 78" autocomplete="tel">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-participants">Antal deltagere</label>
+            <select class="bm-select" id="bm-participants">
+              <option value="1">1 deltager</option>
+              <option value="2">2 deltagere</option>
+              <option value="3">3 deltagere — spar 10%</option>
+              <option value="4">4 deltagere — spar 10%</option>
+              <option value="5">5+ deltagere — kontakt os</option>
+            </select>
+          </div>
+        </div>
+        <div class="bm-payment">
+          <label>Betalingsmetode</label>
+          <div class="bm-pay-opts">
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-faktura" value="faktura" checked>
+            <span>Faktura</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-ean" value="ean">
+            <span>EAN</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-kort" value="kort">
+            <span>Kort</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-mp" value="mobilepay">
+            <span>MobilePay</span>
+          </div>
+        </div>
+        <div class="bm-microcopy" style="margin-top:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          Ingen betaling nu — vi bekræfter inden for 24 timer
+        </div>
+      </form>
+      <div class="bm-footer">
+        <button class="bm-submit" id="bm-submit" type="button">
+          Reservér plads <span class="arrow">→</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Success step -->
+    <div id="bm-success-step" hidden>
+      <div class="bm-header" style="padding-bottom:0">
+        <div></div>
+        <button class="bm-close bm-close-success" aria-label="Luk">×</button>
+      </div>
+      <div class="bm-success">
+        <div class="bm-success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h2>Tak for din tilmelding!</h2>
+        <p>Vi har modtaget din anmodning og sender en bekræftelse til <b id="bm-confirm-email"></b> inden for 24 timer.</p>
+        <div class="bm-success-ref">
+          <div class="ref-label">Bookingsreference</div>
+          <div class="ref-num" id="bm-ref-num">FM-0000</div>
+        </div>
+        <p style="font-size:13px">Vores team kontakter dig med betalingsinformation og praktiske detaljer om kurset.</p>
+        <div class="bm-success-actions">
+          <button class="bm-close-success btn-book" style="flex:1;border-radius:10px;justify-content:center">Luk</button>
+          <a href="Kategorier.html" class="btn-book" style="flex:1;border-radius:10px;justify-content:center;background:transparent;border:1.5px solid var(--line);color:var(--ink)">Se flere kurser</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="tweaks-root"></div>
 
 <script src="image-slot.js"></script>

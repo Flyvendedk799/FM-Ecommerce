@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kursus — Futurematch</title>
+<meta name="description" content="">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <a class="brand" href="Landing.html">
+    <span class="brand-mark"></span>
+    Futurematch
+  </a>
+  <div class="nav-links">
+    <a href="Kategorier.html">Alle kurser</a>
+    <a href="#outcomes" id="nav-udbytte">Udbytte</a>
+    <a href="#datoer" id="nav-datoer">Datoer</a>
+    <a href="#indhold" id="nav-indhold">Indhold</a>
+  </div>
+  <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+</nav>
+
+<!-- Loading -->
+<div id="kursus-loading" class="kursus-loading">
+  <div class="kl-spinner"></div>
+  <p>Henter kursus…</p>
+</div>
+
+<!-- Error -->
+<div id="kursus-error" class="kursus-error" hidden>
+  <div>
+    <h2>Kurset kunne ikke hentes</h2>
+    <p id="kursus-error-msg">Prøv at genindlæse siden eller gå tilbage til kursoversigten.</p>
+    <a href="Kategorier.html" class="btn-book" style="display:inline-flex;margin-top:8px">← Tilbage til kurser</a>
+  </div>
+</div>
+
+<!-- Main content — rendered by kursus.js -->
+<div id="kursus-content" hidden></div>
+
+<footer class="footer wrap" id="site-footer">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a class="brand" href="Landing.html"><span class="brand-mark"></span>Futurematch</a>
+      <p>Danmarks markedsplads for kurser. Vi matcher dig med de rette undervisere fra landets bedste udbydere.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h4>Kategorier</h4>
+        <a href="Kategorier.html#ledelse">Ledelse</a>
+        <a href="Kategorier.html#it">IT &amp; Data</a>
+        <a href="Kategorier.html#cert">Certificering</a>
+        <a href="Kategorier.html#sundhed">Sundhed</a>
+        <a href="Kategorier.html#amu">AMU</a>
+      </div>
+      <div class="footer-col">
+        <h4>Futurematch</h4>
+        <a href="Landing.html">Om os</a>
+        <a href="Landing.html#for-udbydere">For udbydere</a>
+        <a href="#">Firmahold</a>
+        <a href="#">Kontakt</a>
+      </div>
+      <div class="footer-col">
+        <h4>Hjælp</h4>
+        <a href="#">Ofte stillede spørgsmål</a>
+        <a href="#">Afbestilling</a>
+        <a href="#">Handelsbetingelser</a>
+      </div>
+    </div>
+  </div>
+  <div class="bigmark">Future<span class="ital">match</span></div>
+  <div class="footer-bottom">
+    <span>© 2026 Futurematch ApS · CVR 12345678</span>
+    <span>Lavet i Danmark 🇩🇰</span>
+  </div>
+</footer>
+
+<!-- Sticky booking bar -->
+<div class="stickybar" id="stickybar">
+  <div class="stickybar-in">
+    <div class="sb-left">
+      <div>
+        <div class="sb-title" id="sb-title">Kursus</div>
+        <div class="sb-sub" id="sb-sub">Vælg dato og lokation</div>
+      </div>
+    </div>
+    <div class="sb-right">
+      <div class="sb-rating" id="sb-rating" hidden><span class="st">★</span> <b id="sb-rating-val">4.8</b></div>
+      <div class="sb-price" id="sb-price"></div>
+      <button class="sb-btn" id="sb-cta" data-scroll="#datoer">Reservér plads</button>
+    </div>
+  </div>
+</div>
+
+<!-- Booking modal -->
+<div class="booking-overlay" id="booking-overlay" hidden>
+  <div class="booking-modal" role="dialog" aria-modal="true" aria-labelledby="bm-title">
+    <!-- Form step -->
+    <div id="bm-form-step">
+      <div class="bm-header">
+        <h2 id="bm-title">Reservér din plads</h2>
+        <button class="bm-close" id="bm-close" aria-label="Luk">×</button>
+      </div>
+      <div class="bm-summary" id="bm-summary">
+        <div class="bm-sum-icon">📅</div>
+        <div>
+          <div class="bm-sum-title" id="bm-sum-title">Kursus</div>
+          <div class="bm-sum-meta" id="bm-sum-meta">Dato &amp; lokation</div>
+          <div class="bm-sum-price" id="bm-sum-price"></div>
+        </div>
+      </div>
+      <form class="bm-body" id="bm-form" novalidate>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-name">Navn <span class="req">*</span></label>
+            <input class="bm-input" id="bm-name" type="text" placeholder="Dit fulde navn" required autocomplete="name">
+          </div>
+          <div class="bm-field">
+            <label for="bm-email">E-mail <span class="req">*</span></label>
+            <input class="bm-input" id="bm-email" type="email" placeholder="din@mail.dk" required autocomplete="email">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-company">Virksomhed</label>
+            <input class="bm-input" id="bm-company" type="text" placeholder="Virksomhedens navn" autocomplete="organization">
+          </div>
+          <div class="bm-field">
+            <label for="bm-phone">Telefon</label>
+            <input class="bm-input" id="bm-phone" type="tel" placeholder="12 34 56 78" autocomplete="tel">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="bm-field">
+            <label for="bm-participants">Antal deltagere</label>
+            <select class="bm-select" id="bm-participants">
+              <option value="1">1 deltager</option>
+              <option value="2">2 deltagere</option>
+              <option value="3">3 deltagere — spar 10%</option>
+              <option value="4">4 deltagere — spar 10%</option>
+              <option value="5">5+ deltagere — kontakt os</option>
+            </select>
+          </div>
+        </div>
+        <div class="bm-payment">
+          <label>Betalingsmetode</label>
+          <div class="bm-pay-opts">
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-faktura" value="faktura" checked>
+            <span>Faktura</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-ean" value="ean">
+            <span>EAN</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-kort" value="kort">
+            <span>Kort</span>
+            <input class="bm-pay-opt" type="radio" name="payment" id="pay-mp" value="mobilepay">
+            <span>MobilePay</span>
+          </div>
+        </div>
+        <div class="bm-microcopy" style="margin-top:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+          Ingen betaling nu — vi bekræfter inden for 24 timer
+        </div>
+      </form>
+      <div class="bm-footer">
+        <button class="bm-submit" id="bm-submit" type="button">
+          Reservér plads <span class="arrow">→</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Success step -->
+    <div id="bm-success-step" hidden>
+      <div class="bm-header" style="padding-bottom:0">
+        <div></div>
+        <button class="bm-close bm-close-success" aria-label="Luk">×</button>
+      </div>
+      <div class="bm-success">
+        <div class="bm-success-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <h2>Tak for din tilmelding!</h2>
+        <p>Vi har modtaget din anmodning og sender en bekræftelse til <b id="bm-confirm-email"></b> inden for 24 timer.</p>
+        <div class="bm-success-ref">
+          <div class="ref-label">Bookingsreference</div>
+          <div class="ref-num" id="bm-ref-num">FM-0000</div>
+        </div>
+        <p style="font-size:13px">Vores team kontakter dig med betalingsinformation og praktiske detaljer om kurset.</p>
+        <div class="bm-success-actions">
+          <button class="bm-close-success btn-book" style="flex:1;border-radius:10px;justify-content:center">Luk</button>
+          <a href="Kategorier.html" class="btn-book" style="flex:1;border-radius:10px;justify-content:center;background:transparent;border:1.5px solid var(--line);color:var(--ink)">Se flere kurser</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="image-slot.js"></script>
+<script src="kursus.js"></script>
+</body>
+</html>

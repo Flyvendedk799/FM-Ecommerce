@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forhandlingsteknik — Futurematch</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-screen-label="Course product page">
+
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nav">
+  <a class="brand" href="Landing.html">
+    <span class="brand-mark"></span>
+    Futurematch
+  </a>
+  <div class="nav-links">
+    <a href="Kategorier.html">Alle kurser</a>
+    <a href="#outcomes">Udbytte</a>
+    <a href="#datoer">Datoer</a>
+    <a href="#indhold">Indhold</a>
+  </div>
+  <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+</nav>
+
+<main id="top">
+
+<!-- ============ HERO ============ -->
+<section class="hero wrap">
+  <div class="hero-grid">
+    <div class="hero-lead reveal is-in">
+      <div class="hero-meta-row">
+        <span class="chip solid" id="course-chip"><span class="dot"></span>Ledelse &amp; Kommunikation</span>
+        <span class="chip">Fysisk &amp; Online</span>
+        <span class="chip">Dansk</span>
+      </div>
+      <h1 class="display" id="hero-title">
+        <span class="lines">
+          <span class="line-mask"><span>Forhandlings</span></span>
+          <span class="line-mask"><span><span class="ital">teknik</span></span></span>
+        </span>
+      </h1>
+      <p class="hero-sub">Forstå din modpart. Find det gode kompromis. Gå fra bordet med et resultat I begge er tilfredse med.</p>
+      <div class="hero-supplier">
+        <span class="supplier-logo">CW</span>
+        <span>Udbydes af <b>Competence&nbsp;Way</b> · 4,8 ★ fra 312 kursister</span>
+      </div>
+
+      <!-- price block (fills the gap in the left column) -->
+      <div class="hero-price">
+        <div class="hp-main">
+          <div class="hp-label" id="course-price-label">Pris ekskl. moms</div>
+          <div class="hp-amount" id="course-price">kr. 6.900<small>,-</small></div>
+          <div class="hp-note" id="course-price-note">Materialer, forplejning &amp; kursusbevis inkluderet</div>
+        </div>
+        <div class="hp-action">
+          <button class="btn-book" id="course-cta" data-scroll="#datoer">
+            <span id="course-cta-text">Vælg dato</span> <span class="arrow">→</span>
+          </button>
+          <div class="pc-reassure light">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            Ingen betaling nu — du vælger dato først
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="hero-aside reveal reveal-d2 is-in">
+      <div class="hero-media" data-parallax>
+        <image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>
+        <div class="hero-media-tag">
+          <span class="chip accent" id="hero-tag"><span class="dot" style="background:var(--on-accent)"></span><span id="hero-tag-text">1 dag · 09–16</span></span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- quick facts — full-width strip under the hero -->
+  <div class="facts reveal" id="facts-grid">
+    <div class="fact" id="fact-0"><div class="k">Varighed</div><div class="v">1 dag <small>/ 09–16</small></div></div>
+    <div class="fact" id="fact-1"><div class="k">Niveau</div><div class="v">Alle <small>/ ingen forudsætninger</small></div></div>
+    <div class="fact" id="fact-2"><div class="k">Format</div><div class="v">Fysisk <small>/ + online hold</small></div></div>
+    <div class="fact" id="fact-3"><div class="k">Deltagere</div><div class="v">Maks 14 <small>/ pr. hold</small></div></div>
+  </div>
+</section>
+
+</section>
+
+<!-- ============ CERT BLOCK (toggled by course type) ============ -->
+<section id="cert-block" class="section-pad wrap" hidden>
+  <div class="cert-card reveal">
+    <div class="cert-main">
+      <span class="eyebrow">Officiel certificering</span>
+      <h2 class="display" style="margin-top:18px; font-size:clamp(2.1rem,4vw,3.4rem);">Bestå eksamen.<br><span class="ital">Få dit certifikat.</span></h2>
+      <p style="color:var(--muted);margin-top:18px;max-width:46ch;line-height:1.65;">Kurset forbereder dig fuldt ud til den officielle eksamen. Eksamen afholdes på kursets sidste dag og er inkluderet i prisen — ingen ekstra gebyrer.</p>
+      <div class="cert-stats">
+        <div class="cstat"><b id="cert-pass-rate">92%</b><span>beståelsespct.</span></div>
+        <div class="cstat"><b id="cert-format">60 min.</b><span>multiple choice</span></div>
+        <div class="cstat"><b id="cert-validity">Livstid</b><span>certifikatets gyldighed</span></div>
+      </div>
+    </div>
+    <div class="cert-badge-wrap">
+      <div class="cert-badge">
+        <div class="cb-logo" id="cert-abbr">P2</div>
+        <div class="cb-name" id="cert-name">PRINCE2®<br>Foundation</div>
+        <div class="cb-body" id="cert-body">Axelos / PeopleCert</div>
+        <div class="cb-tag">Internationalt anerkendt</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AMU BLOCK (toggled by course type) ============ -->
+<div id="amu-block" class="amu-band wrap" hidden>
+  <div class="amu-inner reveal">
+    <div class="amu-logo">AMU</div>
+    <div class="amu-body">
+      <div class="amu-title">Staten finansierer kurset for berettigede deltagere</div>
+      <div class="amu-desc">Lønmodtagere, ledige og selvstændige med relevant baggrund kan deltage gratis eller mod en reduceret deltagerbetaling via AMU-ordningen. VEU-godtgørelse kan søges for tabte arbejdstimer.</div>
+    </div>
+    <a class="amu-cta" href="#">Tjek om du er berettiget <span class="arrow">→</span></a>
+  </div>
+</div>
+
+<!-- ============ MARQUEE ============ -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee-track">
+    <span class="marquee-item">Win-win resultater</span>
+    <span class="marquee-item">Selvindsigt</span>
+    <span class="marquee-item">Det gode kompromis</span>
+    <span class="marquee-item">Kontrol ved bordet</span>
+    <span class="marquee-item">Effektiv kommunikation</span>
+    <span class="marquee-item">Win-win resultater</span>
+    <span class="marquee-item">Selvindsigt</span>
+    <span class="marquee-item">Det gode kompromis</span>
+    <span class="marquee-item">Kontrol ved bordet</span>
+    <span class="marquee-item">Effektiv kommunikation</span>
+  </div>
+</div>
+
+<!-- ============ OUTCOMES ============ -->
+<section class="section-pad wrap" id="outcomes">
+  <div class="outcomes section-pad" style="padding-inline: clamp(28px, 5vw, 80px);">
+    <div class="reveal">
+      <span class="eyebrow on-dark">Det får du ud af kurset</span>
+      <h2 class="display" id="outcomes-headline" style="margin-top:20px; font-size: clamp(2.2rem,4.6vw,3.8rem); max-width: 20ch;">Tre færdigheder du tager med hjem — og bruger i morgen.</h2>
+    </div>
+    <div class="outcome-list">
+      <div class="outcome reveal">
+        <div class="num">01</div>
+        <div class="otext" id="outcome-1">Lær at skabe win-win-forhandlingsresultater, hvor begge parter rejser sig tilfredse.</div>
+        <div class="oicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a4 4 0 0 0-8 0M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2"/><circle cx="12" cy="8" r="0"/></svg></div>
+      </div>
+      <div class="outcome reveal reveal-d1">
+        <div class="num">02</div>
+        <div class="otext" id="outcome-2">Udvid dit forhandlingsrum og bliv skarp til at identificere det gode kompromis.</div>
+        <div class="oicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4"/></svg></div>
+      </div>
+      <div class="outcome reveal reveal-d2">
+        <div class="num">03</div>
+        <div class="otext" id="outcome-3">Mestr selvindsigt, kontrol og effektiv kommunikation — også når følelserne stiger.</div>
+        <div class="oicon"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 3 2 4 2 7h10c0-3 2-4 2-7a7 7 0 0 0-7-7zM9 21h6"/></svg></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SOCIAL PROOF ============ -->
+<section class="proof wrap">
+  <div class="proofbar reveal">
+    <div class="proof-stat">
+      <span class="ps-num">4,8</span>
+      <span class="ps-stars">★★★★★</span>
+      <span class="ps-label">312 anmeldelser</span>
+    </div>
+    <blockquote class="proof-quote"><span class="qm">“</span>Det bedste kursus jeg har været på. Jeg brugte teknikkerne i en lønforhandling ugen efter — og det virkede.<span class="qm">”</span></blockquote>
+    <div class="proof-author"><b>Mette Kjær</b>Salgschef, Nordisk Handel</div>
+  </div>
+</section>
+
+<!-- ============ SESSION PICKER ============ -->
+<section class="section-pad wrap" id="datoer">
+  <div class="section-head reveal">
+    <div>
+      <span class="eyebrow">Datoer &amp; lokationer</span>
+      <h2 class="display" style="margin-top:18px;">Vælg den by og dato der passer dig</h2>
+    </div>
+    <p class="lead">Kurset afholdes på fem lokationer i Danmark samt som live online-hold. Vælg et hold for at reservere din plads.</p>
+  </div>
+
+  <div class="booking-grid">
+    <div class="reveal reveal-d1">
+      <div class="loc-tabs" id="loc-tabs" role="tablist">
+        <button class="loc-tab" role="tab" aria-selected="true" data-loc="kbh"><span class="lpin"></span>København</button>
+        <button class="loc-tab" role="tab" aria-selected="false" data-loc="aarhus"><span class="lpin"></span>Aarhus</button>
+        <button class="loc-tab" role="tab" aria-selected="false" data-loc="odense"><span class="lpin"></span>Odense</button>
+        <button class="loc-tab" role="tab" aria-selected="false" data-loc="aalborg"><span class="lpin"></span>Aalborg</button>
+        <button class="loc-tab" role="tab" aria-selected="false" data-loc="online"><span class="lpin"></span>Online</button>
+      </div>
+      <div class="session-list" id="session-list"><!-- injected by app.js --></div>
+    </div>
+
+    <aside class="booking-summary reveal reveal-d2">
+      <div class="bs-rating">
+        <span class="bs-stars">★★★★★</span>
+        <span><b>4,8</b>/5 · 312 anmeldelser</span>
+      </div>
+      <div class="bs-row"><span class="bk">Kursus</span><span class="bv">Forhandlingsteknik</span></div>
+      <div class="bs-row"><span class="bk">Lokation</span><span class="bv" id="sum-loc">København</span></div>
+      <div class="bs-row"><span class="bk">Dato</span><span class="bv" id="sum-date">12. juni 2026</span></div>
+      <div class="bs-row"><span class="bk">Format</span><span class="bv" id="sum-format">Fysisk · 1 dag</span></div>
+      <div class="bs-total">
+        <span class="tlabel">I alt<small>ekskl. moms</small></span>
+        <span class="tval">6.900<small> kr.</small></span>
+      </div>
+      <div class="bs-scarcity" id="sum-scarcity" hidden></div>
+      <button class="btn-primary" id="booking-cta"><span id="booking-cta-text">Reservér plads</span> <span class="arrow">→</span></button>
+      <div class="bs-microcopy">Ingen betaling nu — bekræft uden binding</div>
+      <a class="bs-grouphint" data-scroll="#firmahold">
+        <span class="gh-ico">+</span>
+        <span><b>3+ fra samme sted?</b> Spar 10% — eller book som firmahold</span>
+        <span class="gh-arrow">→</span>
+      </a>
+      <ul class="bs-included" id="bs-included-list">
+        <li>Kursusbevis</li>
+        <li>Forplejning hele dagen</li>
+        <li>Alle kursusmaterialer</li>
+        <li>Maks 14 deltagere</li>
+      </ul>
+      <div class="bs-guarantee">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+        Gratis afbestilling indtil 14 dage før
+      </div>
+      <div class="bs-payment">
+        <span class="bp-label">Betal med</span>
+        <span class="pay-badge">Faktura</span>
+        <span class="pay-badge">EAN</span>
+        <span class="pay-badge">Kort</span>
+        <span class="pay-badge">MobilePay</span>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ CURRICULUM ============ -->
+<section class="section-pad wrap" id="indhold">
+  <div class="curriculum section-pad" style="padding-inline: clamp(28px, 5vw, 80px);">
+    <div class="section-head reveal" style="margin-bottom:30px;">
+      <div>
+        <span class="eyebrow">Kursusindhold</span>
+        <h2 class="display" id="curriculum-headline" style="margin-top:18px;">En forhandling i tre akter</h2>
+      </div>
+      <p class="lead" id="curriculum-lead">Vi følger forhandlingen fra forberedelse til evaluering. Klik på en fase for at folde indholdet ud.</p>
+    </div>
+
+    <div class="timeline" id="timeline">
+      <div class="timeline-rail"><div class="fill" id="rail-fill"></div></div>
+
+      <div class="phase active reveal" data-phase>
+        <div class="phase-dot"></div>
+        <div class="phase-head">
+          <span class="phase-tag">Akt 1</span>
+          <span class="phase-label">Før</span>
+          <span class="phase-toggle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="phase-items">
+          <div class="phase-item"><span class="pmark">→</span>Win-win eller "pistolsalg"?</div>
+          <div class="phase-item"><span class="pmark">→</span>Udvid forhandlingsrummet</div>
+          <div class="phase-item"><span class="pmark">→</span>Hvad jeg SKAL have — og hvad der bare er RART at have</div>
+          <div class="phase-item"><span class="pmark">→</span>Interessentanalyse &amp; beføjelser</div>
+          <div class="phase-item"><span class="pmark">→</span>Værdifastsættelse og prioritering af forhandlingspunkter</div>
+          <div class="phase-item"><span class="pmark">→</span>Konjunkturer, marked og aftaleperiode</div>
+        </div>
+      </div>
+
+      <div class="phase reveal" data-phase>
+        <div class="phase-dot"></div>
+        <div class="phase-head">
+          <span class="phase-tag">Akt 2</span>
+          <span class="phase-label">Under</span>
+          <span class="phase-toggle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="phase-items">
+          <div class="phase-item"><span class="pmark">→</span>Tag kontrollen ved bordet</div>
+          <div class="phase-item"><span class="pmark">→</span>Intet er aftalt, før alt er aftalt</div>
+          <div class="phase-item"><span class="pmark">→</span>Lyt — og hør hvad der ikke bliver sagt</div>
+          <div class="phase-item"><span class="pmark">→</span>Håndtering af følelser og selvindsigt</div>
+          <div class="phase-item"><span class="pmark">→</span>Pokerface i praksis</div>
+        </div>
+      </div>
+
+      <div class="phase reveal" data-phase>
+        <div class="phase-dot"></div>
+        <div class="phase-head">
+          <span class="phase-tag">Akt 3</span>
+          <span class="phase-label">Efter</span>
+          <span class="phase-toggle"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+        </div>
+        <div class="phase-items">
+          <div class="phase-item"><span class="pmark">→</span>Evaluering af resultatet</div>
+          <div class="phase-item"><span class="pmark">→</span>Hvad tager du med til næste forhandling?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INFO CARDS ============ -->
+<section class="section-pad wrap">
+  <div class="section-head reveal">
+    <div>
+      <span class="eyebrow">Er kurset noget for dig?</span>
+      <h2 class="display" style="margin-top:18px;">Det praktiske</h2>
+    </div>
+  </div>
+  <div class="info-cards">
+    <div class="info-card reveal">
+      <span class="ic-num">01</span>
+      <div class="ic-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M16 3.5a3 3 0 0 1 0 7M22 21v-2a4 4 0 0 0-3-3.8"/></svg></div>
+      <h3>Målgruppe</h3>
+      <p>For dig der vil blive bedre til at forhandle professionelt og hensigtsmæssigt — og sikre både fremtidige aftaler og det gode samarbejde.</p>
+    </div>
+    <div class="info-card reveal reveal-d1">
+      <span class="ic-num">02</span>
+      <div class="ic-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+      <h3>Forudsætninger</h3>
+      <p>Ingen forudsætninger er nødvendige. Men har du konkrete forhandlinger fra dit arbejdsliv, så tag dem med — vi arbejder med dine egne cases.</p>
+    </div>
+    <div class="info-card reveal reveal-d2">
+      <span class="ic-num">03</span>
+      <div class="ic-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.5" fill="currentColor"/></svg></div>
+      <h3>Kursusmål</h3>
+      <p>Du bliver klædt på til at skabe resultater der tilgodeser begge parter — gennem selvindsigt, forberedelse og evnen til at udvide forhandlingsrummet.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BRING BLOCK (toggled by course type) ============ -->
+<section id="bring-block" class="section-pad wrap" hidden>
+  <div class="section-head reveal">
+    <div>
+      <span class="eyebrow">Praktisk info</span>
+      <h2 class="display" style="margin-top:18px;">Hvad skal du medbringe?</h2>
+    </div>
+    <p class="lead" id="bring-lead">Sørg for at have dette klar, så får du mest muligt ud af dagen.</p>
+  </div>
+  <div class="bring-grid" id="bring-items"><!-- injected by setCoursePreset --></div>
+</section>
+
+<!-- ============ INSTRUCTOR ============ -->
+<section class="section-pad wrap" id="underviser">
+  <div class="instructor section-pad" style="padding-inline: clamp(28px, 5vw, 80px);">
+    <div class="inst-grid">
+      <div class="inst-photo reveal">
+        <image-slot id="instructor-photo" shape="rounded" radius="28" placeholder="Slip portræt af underviser"></image-slot>
+        <span class="ip-badge"><span style="width:7px;height:7px;border-radius:50%;background:var(--accent)"></span>Din underviser</span>
+      </div>
+      <div class="reveal reveal-d1">
+        <span class="eyebrow on-dark">Om underviseren</span>
+        <h2 class="inst-name" style="margin-top:18px;">Therese Waltersdorff</h2>
+        <div class="inst-role">Facilitator · Motivator · Forfatter — Waltersdorff Consulting</div>
+        <p class="inst-bio">Therese brænder for at give andre modet, selvtilliden og værktøjerne til at komme fra A til B. Hun trækker på en lang kommerciel karriere inden for salg, markedsføring og rådgivning — og er kendt som en energisk, humørfyldt og inkluderende underviser. De seneste 6 år har hun undervist flere tusinde kursister i alt fra præsentationsteknik til personlig branding.</p>
+        <div class="inst-creds">
+          <span class="cred"><b>Certificeret</b> · TT38</span>
+          <span class="cred"><b>Certificeret</b> · Mastercoach</span>
+          <span class="cred"><b>Certificeret</b> · Gruppefacilitator</span>
+          <span class="cred"><b>3.000+</b> kursister</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MATERIALS ============ -->
+<section class="section-pad wrap">
+  <div class="section-head reveal">
+    <div>
+      <span class="eyebrow">Bøger &amp; arbejdshæfter</span>
+      <h2 class="display" style="margin-top:18px;">Du går hjem med et helt bibliotek</h2>
+    </div>
+    <p class="lead">Alle materialer indgår i prisen. Træk for at se mere.</p>
+  </div>
+  <div class="materials-track" id="materials">
+    <!-- injected by app.js -->
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="section-pad wrap" id="faq">
+  <div class="faq-grid">
+    <div class="faq-head reveal">
+      <span class="eyebrow">Ofte stillede spørgsmål</span>
+      <h2 class="display" style="margin-top:18px;">Alt du skal vide, før du booker</h2>
+      <p class="lead" style="margin-top:18px;">Finder du ikke svaret? Vi sidder klar ved telefonen alle hverdage 08–16.</p>
+      <a class="faq-contact" href="tel:+4577300123">
+        <span class="fc-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></span>
+        Ring på 77 300 123
+      </a>
+    </div>
+    <div class="faq-list reveal reveal-d1">
+      <details class="faq-item" open>
+        <summary>Hvad er inkluderet i prisen?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Undervisning, alle materialer og arbejdshæfter, forplejning hele dagen samt et kursusbevis. Ingen skjulte gebyrer — prisen du ser er prisen du betaler (ekskl. moms).</div>
+      </details>
+      <details class="faq-item">
+        <summary>Kan jeg betale med faktura eller EAN?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Ja. Vælg faktura, EAN, kort eller MobilePay ved bestilling. For virksomheder og det offentlige sender vi blot en faktura — betaling forfalder efter kurset.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Hvad sker der, hvis jeg bliver forhindret?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Du kan afbestille gratis indtil 14 dage før kursusstart og få pengene retur. Derefter kan du frit overdrage din plads til en kollega — bare giv os besked.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Får jeg et bevis på kurset?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Ja. Alle deltagere modtager et kursusbevis på Forhandlingsteknik, som du kan tilføje til dit CV eller dele på LinkedIn.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Online eller fysisk — hvad bør jeg vælge?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Begge formater følger samme program og samme underviser. Vælg fysisk for mest networking og rollespil ansigt til ansigt — eller online, hvis du vil spare transporten og deltage hjemmefra.</div>
+      </details>
+      <details class="faq-item">
+        <summary>Kan vi være flere fra samme virksomhed?<span class="faq-plus"></span></summary>
+        <div class="faq-a">Helt sikkert. Ved 3+ deltagere får I automatisk 10% mængderabat. Skal I være endnu flere, afholder vi gerne kurset som lukket firmahold tilpasset jeres egne cases.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FIRMAHOLD (corporate cross-sell) ============ -->
+<section class="section-pad wrap" id="firmahold">
+  <div class="firma-card reveal">
+    <div class="firma-deco" aria-hidden="true"></div>
+    <div class="firma-main">
+      <span class="eyebrow on-dark">Firmahold</span>
+      <h2>Skal hele teamet forhandle bedre?</h2>
+      <p>Få Forhandlingsteknik som lukket hold — tilpasset jeres branche, jeres cases og jeres mål. Hos jer eller hos os, fysisk eller online.</p>
+      <div class="firma-cta">
+        <button class="btn-light">Få et uforpligtende tilbud <span class="arrow">→</span></button>
+        <span class="firma-note">Typisk svar inden for 24 timer</span>
+      </div>
+    </div>
+    <div class="firma-stats">
+      <div class="fstat"><b>Fra 6</b><span>deltagere pr. hold</span></div>
+      <div class="fstat"><b>÷25%</b><span>pr. deltager</span></div>
+      <div class="fstat"><b>100%</b><span>skræddersyet</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTACT ============ -->
+<section class="section-pad wrap">
+  <div class="contact-card reveal">
+    <div class="contact-deco"></div>
+    <div>
+      <h2>Har du spørgsmål til holdet?</h2>
+      <p>Vi sidder klar ved telefonen alle hverdage fra 08–16 og hjælper dig gerne med datoer, firmahold eller det helt rigtige kursus.</p>
+    </div>
+    <div class="contact-actions">
+      <a class="contact-line" href="tel:+4577300123">
+        <span class="cl-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></span>
+        <span><span class="cl-k">Ring til os</span><br><span class="cl-v">77 300 123</span></span>
+      </a>
+      <a class="contact-line" href="mailto:kurser@cw.dk">
+        <span class="cl-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7L22 6"/></svg></span>
+        <span><span class="cl-k">Skriv til os</span><br><span class="cl-v">kurser@cw.dk</span></span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RELATED COURSES (retention / cross-sell) ============ -->
+<section class="section-pad wrap" id="related">
+  <div class="section-head reveal">
+    <div>
+      <span class="eyebrow">Fortsæt din udvikling</span>
+      <h2 class="display" style="margin-top:18px;">Kursister på dette hold valgte også</h2>
+    </div>
+    <a class="see-all" href="#">Se alle kurser <span class="arrow">→</span></a>
+  </div>
+  <div class="related-grid reveal reveal-d1" id="related-grid">
+    <!-- injected by app.js -->
+  </div>
+  <!-- retention: notify about new dates -->
+  <div class="notify reveal">
+    <div class="notify-main">
+      <span class="eyebrow">Ikke klar endnu?</span>
+      <h3>Få besked, når vi åbner nye datoer</h3>
+      <p>Vi sender en kort mail, så snart der kommer nye hold — ingen spam, kun nye datoer.</p>
+    </div>
+    <form class="notify-form" onsubmit="return false;">
+      <input type="email" class="notify-input" placeholder="Din arbejdsmail" aria-label="Din e-mail" required>
+      <button class="notify-btn" type="submit">Hold mig opdateret</button>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer wrap">
+  <div class="footer-top">
+    <div class="footer-brand">
+      <a class="brand" href="#top"><span class="brand-mark"></span>Futurematch</a>
+      <p>Danmarks markedsplads for kurser. Vi matcher dig med de rette undervisere fra landets bedste udbydere.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h4>Kategorier</h4>
+        <a href="#">Ledelse</a><a href="#">Kommunikation</a><a href="#">Salg</a><a href="#">IT &amp; data</a><a href="#">Projektledelse</a>
+      </div>
+      <div class="footer-col">
+        <h4>Futurematch</h4>
+        <a href="#">Om os</a><a href="#">For udbydere</a><a href="#">Firmahold</a><a href="#">Kontakt</a>
+      </div>
+      <div class="footer-col">
+        <h4>Hjælp</h4>
+        <a href="#">Ofte stillede spørgsmål</a><a href="#">Afbestilling</a><a href="#">Handelsbetingelser</a>
+      </div>
+    </div>
+  </div>
+  <div class="bigmark">Future<span class="ital">match</span></div>
+  <div class="footer-bottom">
+    <span>© 2026 Futurematch ApS · CVR 12345678</span>
+    <span>Lavet i Danmark 🇩🇰</span>
+  </div>
+</footer>
+
+<!-- ============ STICKY BOOKING BAR ============ -->
+<div class="stickybar" id="stickybar">
+  <div class="stickybar-in">
+    <div class="sb-left">
+      <div>
+        <div class="sb-title">Forhandlingsteknik</div>
+        <div class="sb-sub" id="sb-sub">København · 12. juni · Fysisk</div>
+      </div>
+    </div>
+    <div class="sb-right">
+      <div class="sb-rating"><span class="st">★</span> <b>4,8</b> · 312</div>
+      <div class="sb-price">6.900<small> kr. ekskl. moms</small></div>
+      <button class="sb-btn" data-scroll="#datoer">Reservér plads</button>
+    </div>
+  </div>
+</div>
+
+<div id="tweaks-root"></div>
+
+<script src="image-slot.js"></script>
+<script src="app.js"></script>
+
+<!-- Tweaks (React island) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="tweaks.jsx"></script>
+
+</body>
+</html>

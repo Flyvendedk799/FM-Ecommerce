@@ -11,7 +11,9 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const config = require('./config');
+const db = require('./db');
 const requireAdmin = require('./middleware/requireAdmin');
+const wrapAsync = require('./middleware/wrapAsync');
 const { getStats } = require('./stats');
 
 const app = express();
@@ -65,7 +67,7 @@ app.use('/api/sessions',   require('./routes/sessions'));
 app.use('/api/bookings',   require('./routes/bookings'));
 app.use('/api/inquiries',  require('./routes/inquiries'));
 // Direct stats (admin-only) — single hop, no redirect.
-app.get('/api/stats', requireAdmin, (req, res) => res.json(getStats()));
+app.get('/api/stats', requireAdmin, wrapAsync(async (req, res) => res.json(await getStats())));
 
 // JSON 404 for unknown API routes (must precede the static fallback).
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
@@ -84,11 +86,10 @@ app.get(['/favicon.ico', '/favicon.svg'], (req, res) => {
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain').send('User-agent: *\nDisallow: /admin\nDisallow: /api\nSitemap: /sitemap.xml\n');
 });
-app.get('/sitemap.xml', (req, res) => {
+app.get('/sitemap.xml', wrapAsync(async (req, res) => {
   let courses = [];
   try {
-    const db = require('./db');
-    courses = db.prepare("SELECT id FROM courses WHERE status='active'").all();
+    courses = await db.all("SELECT id FROM courses WHERE status='active'");
   } catch (_) { /* ignore */ }
   const base = `${req.protocol}://${req.get('host')}`;
   const staticPages = ['/Landing.html', '/Kategorier.html', '/Kontakt.html', '/Firmahold.html',
@@ -99,7 +100,7 @@ app.get('/sitemap.xml', (req, res) => {
     urls.map(u => `  <url><loc>${base}${u}</loc></url>`).join('\n') +
     `\n</urlset>\n`;
   res.type('application/xml').send(body);
-});
+}));
 
 /* ---- Admin UI ---- */
 app.use('/admin', express.static(path.join(__dirname, '../admin')));
@@ -118,8 +119,15 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
-  if (err && typeof err.code === 'string' && err.code.startsWith('SQLITE_CONSTRAINT')) {
+  // Constraint violations: SQLITE_CONSTRAINT_* (sqlite), class 23 (pg) and
+  // 22P02 invalid-text-representation (pg, e.g. a non-numeric id).
+  if (err && typeof err.code === 'string' &&
+      (err.code.startsWith('SQLITE_CONSTRAINT') || /^23\d{3}$/.test(err.code) || err.code === '22P02')) {
     return res.status(400).json({ error: 'Invalid reference or constraint violation' });
+  }
+  // pg serialization failure (SERIALIZABLE write conflict) — retryable.
+  if (err && err.code === '40001') {
+    return res.status(409).json({ error: 'Samtidig opdatering — prøv igen' });
   }
   if (err && err.status && err.status < 500) {
     return res.status(err.status).json({ error: err.expose ? err.message : 'Bad request' });

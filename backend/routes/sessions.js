@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const requireAdmin = require('../middleware/requireAdmin');
+const wrapAsync = require('../middleware/wrapAsync');
 const { httpError, statusOrDefault, statusStrict, intInRange, isISODate } = require('../validate');
 
 /* ---- auth: reads are public; writes are admin ---- */
@@ -27,7 +28,7 @@ const SEATS_REMAINING = `(sess.seats - COALESCE(
   (SELECT SUM(b.participants) FROM bookings b WHERE b.session_id = sess.id AND b.status != 'cancelled'), 0
 )) AS seats_remaining`;
 
-router.get('/', (req, res) => {
+router.get('/', wrapAsync(async (req, res) => {
   const { course_id } = req.query;
   let sql = `
     SELECT sess.*, ${SEATS_REMAINING}, c.title as course_title, s.name as supplier_name
@@ -39,21 +40,21 @@ router.get('/', (req, res) => {
   const params = [];
   if (course_id) { sql += ' AND sess.course_id = ?'; params.push(course_id); }
   sql += ' ORDER BY sess.date ASC';
-  res.json(db.prepare(sql).all(...params).map(enrichSession));
-});
+  res.json((await db.all(sql, ...params)).map(enrichSession));
+}));
 
-router.get('/:id', (req, res) => {
-  const row = db.prepare(`
+router.get('/:id', wrapAsync(async (req, res) => {
+  const row = await db.get(`
     SELECT sess.*, ${SEATS_REMAINING}, c.title as course_title
     FROM sessions sess
     LEFT JOIN courses c ON c.id = sess.course_id
     WHERE sess.id = ?
-  `).get(req.params.id);
+  `, req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });
   res.json(enrichSession(row));
-});
+}));
 
-router.post('/', (req, res) => {
+router.post('/', wrapAsync(async (req, res) => {
   const { course_id, date, location, venue = '', format = 'Fysisk · 1 dag' } = req.body;
   if (!course_id || !date || !location) {
     throw httpError(400, 'course_id, date and location are required');
@@ -64,15 +65,15 @@ router.post('/', (req, res) => {
   const is_popular = req.body.is_popular ? 1 : 0;
   const status    = statusOrDefault(req.body.status, 'session', 'active');
 
-  const result = db.prepare(`
+  const result = await db.run(`
     INSERT INTO sessions (course_id, date, location, venue, format, is_online, seats, is_popular, status)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(course_id, date, location, venue, format, is_online, seats, is_popular, status);
+  `, course_id, date, location, venue, format, is_online, seats, is_popular, status);
   res.status(201).json({ id: result.lastInsertRowid });
-});
+}));
 
-router.put('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM sessions WHERE id=?').get(req.params.id);
+router.put('/:id', wrapAsync(async (req, res) => {
+  const existing = await db.get('SELECT * FROM sessions WHERE id=?', req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
   const { date, location, venue, format } = req.body;
   if (date !== undefined && !isISODate(date)) throw httpError(400, 'date skal være på formen ÅÅÅÅ-MM-DD');
@@ -81,10 +82,10 @@ router.put('/:id', (req, res) => {
     : existing.seats;
   const status = statusStrict(req.body.status, 'session', existing.status);
 
-  db.prepare(`
+  await db.run(`
     UPDATE sessions SET date=?, location=?, venue=?, format=?, is_online=?, seats=?, is_popular=?, status=?
     WHERE id=?
-  `).run(
+  `,
     date ?? existing.date, location ?? existing.location, venue ?? existing.venue,
     format ?? existing.format,
     req.body.is_online !== undefined ? (req.body.is_online ? 1 : 0) : existing.is_online,
@@ -93,12 +94,12 @@ router.put('/:id', (req, res) => {
     status, req.params.id
   );
   res.json({ ok: true });
-});
+}));
 
-router.delete('/:id', (req, res) => {
-  const result = db.prepare('DELETE FROM sessions WHERE id=?').run(req.params.id);
+router.delete('/:id', wrapAsync(async (req, res) => {
+  const result = await db.run('DELETE FROM sessions WHERE id=?', req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

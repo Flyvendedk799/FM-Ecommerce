@@ -1,8 +1,6 @@
 /* ============================================================
    Central configuration — environment-driven with sane dev defaults.
    ============================================================ */
-const path = require('path');
-
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProd = NODE_ENV === 'production';
 const isTest = NODE_ENV === 'test';
@@ -36,8 +34,8 @@ module.exports = {
   isProd,
   isTest,
   PORT: parseInt(process.env.PORT, 10) || 3000,
-  // DB_PATH is env-overridable so tests can point at ':memory:' and never touch the real DB.
-  DB_PATH: process.env.DB_PATH || path.join(__dirname, 'futurematch.db'),
+  // DB selection lives in db.js: DATABASE_URL → Postgres; otherwise sqlite at
+  // DB_PATH (tests use ':memory:') or DATA_DIR/futurematch.db or the legacy file.
   ADMIN_TOKEN,
   ADMIN_USERNAME,
   ADMIN_PASSWORD,

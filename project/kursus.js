@@ -39,6 +39,22 @@
     return 'kr. ' + (+price).toLocaleString('da-DK') + ',-';
   }
 
+  function todayISO() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function sessionSeatsRemaining(s) {
+    const seats = s && s.seats_remaining != null ? s.seats_remaining : (s ? s.seats : null);
+    return seats == null ? null : Number(seats);
+  }
+
+  function hasSeat(s) {
+    const seats = sessionSeatsRemaining(s);
+    return seats == null || seats > 0;
+  }
+
   function showError(msg) {
     loading.hidden = true;
     if (msg) errorMsg.textContent = msg;
@@ -55,6 +71,7 @@
   /* ---- Smooth scroll ---- */
   function bindScrollBtns() {
     document.querySelectorAll('[data-scroll]').forEach(b => {
+      if (b.id === 'sb-cta') return;
       b.addEventListener('click', () => {
         const t = document.querySelector(b.dataset.scroll);
         if (t) t.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
@@ -133,14 +150,21 @@
     const phases   = Array.isArray(course.curriculum)    ? course.curriculum    : [];
     const badge    = course.badge || '';
 
-    // Group sessions by location
+    // Group upcoming sessions by location. Sold-out sessions remain visible so
+    // users understand there were dates, but they cannot be selected.
     const byLoc = {};
-    (sessions || []).filter(s => s.status === 'active').forEach(s => {
+    const today = todayISO();
+    (sessions || []).filter(s => s.status === 'active' && (!s.date || s.date >= today)).forEach(s => {
       const key = s.is_online ? 'online' : s.location;
       if (!byLoc[key]) byLoc[key] = [];
       byLoc[key].push(s);
     });
-    const locKeys = Object.keys(byLoc);
+    const locOrder = ['København', 'Aarhus', 'Odense', 'Aalborg', 'online'];
+    const locKeys = Object.keys(byLoc).sort((a, b) => {
+      const ai = locOrder.indexOf(a), bi = locOrder.indexOf(b);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b, 'da');
+    });
+    const hasBookableSessions = locKeys.some(k => (byLoc[k] || []).some(hasSeat));
 
     // Build HTML
     contentEl.innerHTML = buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related);
@@ -152,6 +176,8 @@
     // Init sticky bar
     document.getElementById('sb-title').textContent = course.title;
     document.getElementById('sb-price').textContent = fmtPrice(course.price, badge) + ' ekskl. moms';
+    document.getElementById('sb-sub').textContent = hasBookableSessions ? 'Vælg dato og lokation' : 'Få besked om nye datoer';
+    document.getElementById('sb-cta').textContent = hasBookableSessions ? 'Reservér plads' : 'Få besked';
     if (course.rating) {
       document.getElementById('sb-rating').hidden = false;
       document.getElementById('sb-rating-val').textContent = (+course.rating).toFixed(1);
@@ -185,6 +211,18 @@
       </div>`).join('');
 
     const marqueeItems = [...marquee, ...marquee].map(t => `<span class="marquee-item">${esc(t)}</span>`).join('');
+    const notifyHTML = `
+  <div class="notify reveal">
+    <div class="notify-main">
+      <span class="eyebrow">Ikke klar endnu?</span>
+      <h3>Få besked, når vi åbner nye datoer</h3>
+      <p>Vi sender en kort mail, så snart der kommer nye hold — ingen spam.</p>
+    </div>
+    <form class="notify-form" id="notify-form">
+      <input type="email" class="notify-input" placeholder="Din arbejdsmail" required>
+      <button class="notify-btn" type="submit">Hold mig opdateret</button>
+    </form>
+  </div>`;
 
     return `
 <main id="top">
@@ -349,6 +387,10 @@ ${course.rating && course.review_count ? `
     <div>
       <div class="nd-t">Ingen faste datoer tilgængelige endnu</div>
       <div class="nd-s">Ring til ${esc(course.supplier_name||'os')} for at høre om kommende hold og tilpassede datoer.</div>
+      <div class="no-dates-actions">
+        <button class="btn-primary compact" id="no-dates-cta">Få besked om nye datoer</button>
+        <a class="nd-link" href="Kontakt.html?emne=firmahold">Spørg om firmahold</a>
+      </div>
     </div>
   </div>` : `
   <div class="booking-grid">
@@ -356,7 +398,7 @@ ${course.rating && course.review_count ? `
       <div class="loc-tabs" id="loc-tabs" role="tablist">
         ${locKeys.map((k, i) => `
         <button class="loc-tab" role="tab" aria-selected="${i===0}" data-loc="${esc(k)}">
-          <span class="lpin"></span>${esc(k)}
+          <span class="lpin"></span>${esc(k === 'online' ? 'Online' : k)}
         </button>`).join('')}
       </div>
       <div class="session-list" id="session-list"></div>
@@ -508,17 +550,12 @@ ${related.length > 0 ? `
     </a>`).join('')}
   </div>
   <!-- Notify -->
-  <div class="notify reveal">
-    <div class="notify-main">
-      <span class="eyebrow">Ikke klar endnu?</span>
-      <h3>Få besked, når vi åbner nye datoer</h3>
-      <p>Vi sender en kort mail, så snart der kommer nye hold — ingen spam.</p>
-    </div>
-    <form class="notify-form" id="notify-form">
-      <input type="email" class="notify-input" placeholder="Din arbejdsmail" required>
-      <button class="notify-btn" type="submit">Hold mig opdateret</button>
-    </form>
-  </div>
+  ${notifyHTML}
+</section>` : ''}
+
+${related.length === 0 ? `
+<section class="section-pad wrap" id="updates">
+  ${notifyHTML}
 </section>` : ''}
 
 </main>`;
@@ -538,8 +575,20 @@ ${related.length > 0 ? `
     const scarc   = document.getElementById('sum-scarcity');
     const sbSub   = document.getElementById('sb-sub');
 
+    const bookingCta = document.getElementById('booking-cta');
+
     // Prefer real remaining capacity over total seats when the API provides it.
-    function seatsOf(s) { return s.seats_remaining != null ? s.seats_remaining : s.seats; }
+    function seatsOf(s) { return sessionSeatsRemaining(s); }
+
+    function locLabel(locKey) { return locKey === 'online' ? 'Online' : locKey; }
+
+    function setBookingCta(bookable) {
+      if (bookingCta) bookingCta.innerHTML = bookable
+        ? 'Reservér plads <span class="arrow">→</span>'
+        : 'Skriv mig på venteliste <span class="arrow">→</span>';
+      const sbBtn = document.getElementById('sb-cta');
+      if (sbBtn) sbBtn.textContent = bookable ? 'Reservér plads' : 'Få besked';
+    }
 
     if (list) {
       list.setAttribute('role', 'radiogroup');
@@ -570,11 +619,23 @@ ${related.length > 0 ? `
       if (sumFmt)  sumFmt.textContent  = dt.format;
       if (sbSub)   sbSub.textContent   = `${dt.loc} · ${fmtDateFull(dt.date)}`;
       setScarcity(dt.seats ? +dt.seats : null);
+      setBookingCta(true);
+    }
+
+    function showNoAvailable(locKey) {
+      selectedSession = null;
+      const label = locLabel(locKey);
+      if (sumLoc)  sumLoc.textContent  = label;
+      if (sumDate) sumDate.textContent = 'Venteliste';
+      if (sumFmt)  sumFmt.textContent  = 'Ingen ledige pladser';
+      if (sbSub)   sbSub.textContent   = `${label} · få besked om nye datoer`;
+      if (scarc)   scarc.hidden = true;
+      setBookingCta(false);
     }
 
     // Move selection+focus to a sibling session row (keyboard arrow nav).
     function moveSession(current, dir) {
-      const rows = Array.prototype.slice.call(list.querySelectorAll('.session'));
+      const rows = Array.prototype.slice.call(list.querySelectorAll('.session:not(.is-sold-out)'));
       const idx = rows.indexOf(current);
       if (idx < 0) return;
       const next = rows[(idx + dir + rows.length) % rows.length];
@@ -590,16 +651,20 @@ ${related.length > 0 ? `
         const day = String(d.getDate()).padStart(2,'0');
         const mon = M_ABBR[d.getMonth()];
         const seats = seatsOf(s);
-        const seatTxt = seats <= 4
+        const soldOut = seats != null && seats <= 0;
+        const seatTxt = soldOut
+          ? '<span class="sold">Udsolgt</span>'
+          : seats != null && seats <= 4
           ? `<span class="low">Kun ${seats} pladser</span>`
-          : `<b>${seats}</b> pladser`;
+          : seats != null ? `<b>${seats}</b> pladser` : 'Ledige pladser';
         const popTag = s.is_popular ? `<span class="session-pop">Populært</span>` : '';
         const el = document.createElement('div');
-        el.className = 'session';
+        el.className = 'session' + (soldOut ? ' is-sold-out' : '');
         el.setAttribute('role', 'radio');
-        el.setAttribute('aria-selected', i===0 ? 'true' : 'false');
-        el.setAttribute('aria-checked', i===0 ? 'true' : 'false');
-        el.tabIndex = i===0 ? 0 : -1;
+        el.setAttribute('aria-selected', 'false');
+        el.setAttribute('aria-checked', 'false');
+        if (soldOut) el.setAttribute('aria-disabled', 'true');
+        el.tabIndex = soldOut ? -1 : (i===0 ? 0 : -1);
         el.dataset.id     = s.id;
         el.dataset.date   = s.date;
         el.dataset.loc    = s.location;
@@ -615,23 +680,26 @@ ${related.length > 0 ? `
           <span class="session-format${s.is_online?' online':''}">${s.is_online?'Online':'Fysisk'}</span>
           <div class="session-seats">${seatTxt}</div>
           <span class="session-radio"></span>`;
-        el.addEventListener('click', () => pickSession(el));
-        el.addEventListener('keydown', e => {
-          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
-            e.preventDefault();
-            pickSession(el);
-          } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-            e.preventDefault();
-            moveSession(el, 1);
-          } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-            e.preventDefault();
-            moveSession(el, -1);
-          }
-        });
+        if (!soldOut) {
+          el.addEventListener('click', () => pickSession(el));
+          el.addEventListener('keydown', e => {
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+              e.preventDefault();
+              pickSession(el);
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              moveSession(el, 1);
+            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+              e.preventDefault();
+              moveSession(el, -1);
+            }
+          });
+        }
         list.appendChild(el);
       });
-      const first = list.querySelector('.session');
+      const first = list.querySelector('.session:not(.is-sold-out)');
       if (first) pickSession(first);
+      else showNoAvailable(locKey);
     }
 
     // Move active location tab (keyboard arrow nav across the tablist).
@@ -717,9 +785,69 @@ ${related.length > 0 ? `
     const formStep   = document.getElementById('bm-form-step');
     const successStep= document.getElementById('bm-success-step');
     const submitBtn  = document.getElementById('bm-submit');
+    const paymentWrap= document.getElementById('bm-payment-wrap');
+    const messageRow = document.getElementById('bm-message-row');
+    const errorBox   = document.getElementById('bm-error');
     let lastFocused  = null;
+    let activeMode   = 'booking';
 
     const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+    function submitLabel(mode) {
+      if (mode === 'firmahold') return 'Send forespørgsel <span class="arrow">→</span>';
+      if (mode === 'notify') return 'Skriv mig op <span class="arrow">→</span>';
+      return 'Reservér plads <span class="arrow">→</span>';
+    }
+
+    function setError(message) {
+      if (!errorBox) return;
+      errorBox.textContent = message || '';
+      errorBox.hidden = !message;
+    }
+
+    function setBusy(on) {
+      if (!submitBtn) return;
+      submitBtn.disabled = on;
+      submitBtn.innerHTML = on ? '<span>Sender…</span>' : submitLabel(activeMode);
+    }
+
+    function setMode(mode) {
+      activeMode = mode;
+      setError('');
+
+      const title = document.getElementById('bm-title');
+      const icon  = document.getElementById('bm-sum-icon');
+      const meta  = document.getElementById('bm-sum-meta');
+      const price = document.getElementById('bm-sum-price');
+      const msg   = document.getElementById('bm-message');
+
+      const isBooking = mode === 'booking';
+      const isFirm    = mode === 'firmahold';
+
+      if (paymentWrap) paymentWrap.hidden = !isBooking;
+      if (messageRow) messageRow.hidden = isBooking;
+      if (msg) msg.placeholder = isFirm
+        ? 'F.eks. antal deltagere, ønsket dato, sted og hvad teamet skal træne'
+        : 'F.eks. ønsket by eller om du vil have besked om online hold';
+
+      if (title) title.textContent = isFirm
+        ? 'Få tilbud på firmahold'
+        : isBooking ? 'Reservér din plads' : 'Få besked om nye datoer';
+      if (icon) icon.textContent = isFirm ? '👥' : isBooking ? '📅' : '✉';
+
+      document.getElementById('bm-sum-title').textContent = course.title;
+      if (isBooking && selectedSession) {
+        if (meta) meta.textContent = `${selectedSession.location} · ${fmtDateFull(selectedSession.date)} · ${selectedSession.format}`;
+        if (price) price.textContent = fmtPrice(course.price, course.badge) + ' ekskl. moms';
+      } else if (isFirm) {
+        if (meta) meta.textContent = 'Lukket hold for jeres team · fysisk eller online';
+        if (price) price.textContent = 'Svar inden for én hverdag';
+      } else {
+        if (meta) meta.textContent = 'Vi giver besked, når der kommer nye ledige hold';
+        if (price) price.textContent = 'Gratis og uforpligtende';
+      }
+      setBusy(false);
+    }
 
     // The currently visible modal step (form or success) — focus stays trapped within it.
     function activePanel() {
@@ -745,18 +873,14 @@ ${related.length > 0 ? `
       });
     }
 
-    function openModal() {
+    function openModal(mode) {
       lastFocused = document.activeElement;
-      // Populate summary
-      document.getElementById('bm-sum-title').textContent = course.title;
-      const meta = selectedSession
-        ? `${selectedSession.location} · ${fmtDateFull(selectedSession.date)} · ${selectedSession.format}`
-        : 'Vælg dato i sessionsplanlæggeren';
-      document.getElementById('bm-sum-meta').textContent = meta;
-      document.getElementById('bm-sum-price').textContent = fmtPrice(course.price, course.badge) + ' ekskl. moms';
+      mode = mode || 'booking';
+      if (mode === 'booking' && !selectedSession) mode = 'notify';
 
       formStep.hidden    = false;
       successStep.hidden = true;
+      setMode(mode);
       overlay.hidden     = false;
       document.body.style.overflow = 'hidden';
       setChromeInert(true);
@@ -786,10 +910,18 @@ ${related.length > 0 ? `
       }
     }
 
+    function openFromClick(mode) {
+      return function(e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        openModal(mode);
+      };
+    }
+
     // Open triggers
-    document.getElementById('booking-cta')?.addEventListener('click', openModal);
-    document.getElementById('firma-book-btn')?.addEventListener('click', openModal);
-    document.querySelector('#stickybar .sb-btn')?.addEventListener('click', openModal);
+    document.getElementById('booking-cta')?.addEventListener('click', openFromClick('booking'));
+    document.getElementById('no-dates-cta')?.addEventListener('click', openFromClick('notify'));
+    document.getElementById('firma-book-btn')?.addEventListener('click', openFromClick('firmahold'));
+    document.querySelector('#stickybar .sb-btn')?.addEventListener('click', openFromClick('booking'));
 
     // Close triggers
     document.getElementById('bm-close')?.addEventListener('click', closeModal);
@@ -800,51 +932,83 @@ ${related.length > 0 ? `
 
     // Submit
     submitBtn?.addEventListener('click', async () => {
-      const name  = document.getElementById('bm-name')?.value.trim();
-      const email = document.getElementById('bm-email')?.value.trim();
+      const nameEl  = document.getElementById('bm-name');
+      const emailEl = document.getElementById('bm-email');
+      const name  = nameEl?.value.trim();
+      const email = emailEl?.value.trim();
+      setError('');
 
-      if (!name)  { document.getElementById('bm-name').style.borderColor  = 'var(--accent)'; document.getElementById('bm-name').focus(); return; }
+      if (!name)  { nameEl.style.borderColor  = 'var(--accent)'; nameEl.focus(); setError('Skriv dit navn for at fortsætte.'); return; }
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        document.getElementById('bm-email').style.borderColor = 'var(--accent)';
-        document.getElementById('bm-email').focus(); return;
+        emailEl.style.borderColor = 'var(--accent)';
+        emailEl.focus(); setError('Skriv en gyldig e-mailadresse.'); return;
+      }
+      if (activeMode === 'booking' && !selectedSession) {
+        setError('Vælg et hold med ledige pladser først, eller skriv dig på venteliste.');
+        return;
       }
 
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<span>Sender…</span>';
+      setBusy(true);
 
       const paymentMethod = document.querySelector('input[name="payment"]:checked')?.value || 'faktura';
       const participants  = parseInt(document.getElementById('bm-participants')?.value) || 1;
 
       try {
-        const body = {
-          session_id:       selectedSession?.id || null,
-          customer_name:    name,
-          customer_email:   email,
-          customer_company: document.getElementById('bm-company')?.value.trim() || '',
-          customer_phone:   document.getElementById('bm-phone')?.value.trim() || '',
-          participants,
-          payment_method:   paymentMethod,
-          status:           'pending',
-        };
-
-        const res  = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
+        let res;
+        if (activeMode === 'booking') {
+          res  = await fetch('/api/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id:       selectedSession.id,
+              customer_name:    name,
+              customer_email:   email,
+              customer_company: document.getElementById('bm-company')?.value.trim() || '',
+              customer_phone:   document.getElementById('bm-phone')?.value.trim() || '',
+              participants,
+              payment_method:   paymentMethod,
+              status:           'pending',
+            }),
+          });
+        } else {
+          res = await fetch('/api/inquiries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: activeMode === 'firmahold' ? 'firmahold' : 'notify',
+              name,
+              email,
+              phone: document.getElementById('bm-phone')?.value.trim() || '',
+              company: document.getElementById('bm-company')?.value.trim() || '',
+              participants,
+              course_id: course.id,
+              course_title: course.title,
+              subject: activeMode === 'firmahold' ? 'Firmahold / skræddersyet forløb' : 'Besked om nye datoer',
+              message: document.getElementById('bm-message')?.value.trim() || '',
+            }),
+          });
+        }
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Booking fejlede');
+        if (!res.ok) throw new Error(data.error || 'Anmodningen kunne ikke sendes');
 
         // Show success
-        document.getElementById('bm-confirm-email').textContent = email;
-        document.getElementById('bm-ref-num').textContent = 'FM-' + String(data.id).padStart(4, '0');
+        const successTitle = document.getElementById('bm-success-title');
+        const successCopy = document.getElementById('bm-success-copy');
+        const refLabel = document.getElementById('bm-ref-label');
+        if (successTitle) successTitle.textContent = activeMode === 'booking'
+          ? 'Tak for din tilmelding!'
+          : activeMode === 'firmahold' ? 'Tak — vi vender tilbage' : 'Du er skrevet op';
+        if (successCopy) successCopy.innerHTML = activeMode === 'booking'
+          ? 'Vi har modtaget din anmodning og sender en bekræftelse til <b>' + esc(email) + '</b> inden for 24 timer.'
+          : 'Vi har modtaget din henvendelse og kontakter <b>' + esc(email) + '</b> inden for én hverdag.';
+        if (refLabel) refLabel.textContent = activeMode === 'booking' ? 'Bookingsreference' : 'Henvendelsesreference';
+        document.getElementById('bm-ref-num').textContent = (activeMode === 'booking' ? 'FM-' : 'FMH-') + String(data.id).padStart(4, '0');
         formStep.hidden    = true;
         successStep.hidden = false;
 
       } catch (e) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Reservér plads <span class="arrow">→</span>';
-        alert('Der opstod en fejl: ' + e.message + '\nPrøv igen eller ring til os.');
+        setBusy(false);
+        setError(e.message || 'Der opstod en fejl. Prøv igen eller ring til os.');
       }
     });
 
@@ -860,13 +1024,23 @@ ${related.length > 0 ? `
   function initNotify(course) {
     const form = document.getElementById('notify-form');
     if (!form) return;
+    const err = document.createElement('div');
+    err.className = 'notify-error';
+    err.hidden = true;
+    form.appendChild(err);
+    function showNotifyError(message) {
+      err.textContent = message || '';
+      err.hidden = !message;
+    }
     form.addEventListener('submit', async function(e) {
       e.preventDefault();
       const input = form.querySelector('input[type="email"]');
       const btn   = form.querySelector('button');
       const email = input && input.value.trim();
+      showNotifyError('');
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         if (input) { input.style.borderColor = 'var(--accent)'; input.focus(); }
+        showNotifyError('Skriv en gyldig e-mailadresse.');
         return;
       }
       btn.textContent = 'Gemmer…';
@@ -888,7 +1062,7 @@ ${related.length > 0 ? `
       } catch (_) {
         btn.textContent = 'Hold mig opdateret';
         btn.disabled = false;
-        alert('Tilmelding mislykkedes. Prøv igen om lidt.');
+        showNotifyError('Tilmelding mislykkedes. Prøv igen om lidt.');
       }
     });
   }

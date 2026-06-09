@@ -13,6 +13,14 @@
   function setToken(t) { adminToken = t || ''; localStorage.setItem('fm_admin_token', adminToken); }
   function clearToken() { adminToken = ''; localStorage.removeItem('fm_admin_token'); }
 
+  function closeBlockingChrome() {
+    ['confirm-overlay', 'modal-overlay'].forEach(id => {
+      const overlay = document.getElementById(id);
+      if (overlay) overlay.hidden = true;
+    });
+    document.body.style.overflow = '';
+  }
+
   /* ============ API WRAPPER ============ */
   async function api(path, opts = {}) {
     const { headers: optHeaders, ...rest } = opts;
@@ -28,7 +36,9 @@
     if (res.status === 401) {
       clearToken();
       showLogin('Forkert eller udløbet adgangstoken. Prøv igen.');
-      throw new Error('Unauthorized');
+      const err = new Error('Unauthorized — admin token required');
+      err.status = 401;
+      throw err;
     }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -99,13 +109,27 @@
   let currentPage = '';
 
   function navigate(page) {
+    if (!adminToken) {
+      showLogin();
+      return;
+    }
     if (!page || !PAGES[page]) page = 'dashboard';
     currentPage = page;
     document.querySelectorAll('.nav-item').forEach(a => {
       a.classList.toggle('active', a.dataset.page === page);
     });
     content.innerHTML = '<div class="content-loader"><div class="loader-spinner"></div></div>';
-    PAGES[page]();
+    Promise.resolve(PAGES[page]()).catch(err => {
+      if (err && err.status === 401) return;
+      const msg = err && err.message ? err.message : 'Siden kunne ikke indlæses';
+      content.innerHTML = `
+        <div class="empty-state" style="margin:32px">
+          <div class="es-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <h3>Kunne ikke indlæse siden</h3>
+          <p>${escHtml(msg)}</p>
+        </div>`;
+      toast(msg, 'error');
+    });
   }
 
   /* ============ FORMAT HELPERS ============ */
@@ -1649,6 +1673,8 @@
 
   /* ============ LOGIN GATE ============ */
   function showLogin(message) {
+    closeBlockingChrome();
+    document.querySelectorAll('.nav-item').forEach(a => a.classList.remove('active'));
     const inputStyle = 'padding:13px 15px;border:1.5px solid var(--border,#ddd);border-radius:10px;font-size:15px;width:100%';
     content.innerHTML = `
       <div style="max-width:420px;margin:14vh auto 0;text-align:center">
@@ -1678,6 +1704,7 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Login mislykkedes');
         setToken(data.token);
+        closeBlockingChrome();
         boot();
       } catch (err) {
         showLogin(err.message || 'Login mislykkedes');
@@ -1687,6 +1714,7 @@
   }
 
   async function boot() {
+    closeBlockingChrome();
     if (!adminToken) { showLogin(); return; }
     try {
       await api('/stats');          // validate stored token before showing the app

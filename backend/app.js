@@ -103,8 +103,20 @@ app.get('/sitemap.xml', wrapAsync(async (req, res) => {
 }));
 
 /* ---- Admin UI ---- */
-app.use('/admin', express.static(path.join(__dirname, '../admin')));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '../admin/index.html')));
+const adminDir = path.join(__dirname, '../admin');
+function setAdminNoStore(res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+app.get(['/admin', '/admin/'], (req, res) => {
+  setAdminNoStore(res);
+  res.sendFile(path.join(adminDir, 'index.html'));
+});
+app.use('/admin', express.static(adminDir, {
+  index: false,
+  setHeaders: setAdminNoStore,
+}));
 
 /* ---- Frontend ---- */
 // Serve the image-slot state explicitly: express.static ignores dotfiles, but

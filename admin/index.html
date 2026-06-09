@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store">
 <title>Futurematch Admin</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="/admin/admin.css?v=20260609-admin-auth-2">
 </head>
 <body>
 
@@ -81,7 +82,7 @@
 </div>
 
 <!-- Modal -->
-<div class="modal-overlay" id="modal-overlay" hidden>
+<div class="modal-overlay" id="modal-overlay" hidden style="display:none">
   <div class="modal" id="modal" role="dialog" aria-modal="true">
     <div class="modal-header">
       <h2 class="modal-title" id="modal-title">Titel</h2>
@@ -95,7 +96,7 @@
 </div>
 
 <!-- Confirm dialog -->
-<div class="modal-overlay" id="confirm-overlay" hidden>
+<div class="modal-overlay" id="confirm-overlay" hidden style="display:none">
   <div class="modal confirm-modal" id="confirm-modal">
     <div class="confirm-icon">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -112,6 +113,6 @@
 <!-- Toast container -->
 <div class="toast-container" id="toast-container" aria-live="polite"></div>
 
-<script src="admin.js"></script>
+<script src="/admin/admin.js?v=20260609-admin-auth-2"></script>
 </body>
 </html>

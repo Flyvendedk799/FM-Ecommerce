@@ -13,12 +13,28 @@
   function setToken(t) { adminToken = t || ''; localStorage.setItem('fm_admin_token', adminToken); }
   function clearToken() { adminToken = ''; localStorage.removeItem('fm_admin_token'); }
 
+  function hideOverlay(overlay) {
+    if (!overlay) return;
+    overlay.hidden = true;
+    overlay.style.display = 'none';
+  }
+
+  function showOverlay(overlay) {
+    if (!overlay) return;
+    overlay.hidden = false;
+    overlay.style.display = '';
+  }
+
   function closeBlockingChrome() {
     ['confirm-overlay', 'modal-overlay'].forEach(id => {
       const overlay = document.getElementById(id);
-      if (overlay) overlay.hidden = true;
+      hideOverlay(overlay);
     });
     document.body.style.overflow = '';
+  }
+
+  function isAuthError(err) {
+    return !!err && (err.status === 401 || /admin token required|unauthorized/i.test(err.message || ''));
   }
 
   /* ============ API WRAPPER ============ */
@@ -69,11 +85,11 @@
       const overlay = document.getElementById('confirm-overlay');
       document.getElementById('confirm-title').textContent = title;
       document.getElementById('confirm-message').textContent = message;
-      overlay.hidden = false;
+      showOverlay(overlay);
       const ok = document.getElementById('confirm-ok');
       const cancel = document.getElementById('confirm-cancel');
       function cleanup(result) {
-        overlay.hidden = true;
+        hideOverlay(overlay);
         ok.onclick = null; cancel.onclick = null;
         resolve(result);
       }
@@ -92,7 +108,7 @@
     modalTitle.textContent = title;
     modalBody.innerHTML = bodyHTML;
     modalFooter.innerHTML = footerHTML;
-    modalOverlay.hidden = false;
+    showOverlay(modalOverlay);
     document.getElementById('modal-close').onclick = closeModal;
     modalOverlay.onclick = e => { if (e.target === modalOverlay) closeModal(); };
     const first = modalBody.querySelector('input, select, textarea');
@@ -100,7 +116,7 @@
   }
 
   function closeModal() {
-    modalOverlay.hidden = true;
+    hideOverlay(modalOverlay);
     modalBody.innerHTML = '';
     modalFooter.innerHTML = '';
   }
@@ -120,7 +136,10 @@
     });
     content.innerHTML = '<div class="content-loader"><div class="loader-spinner"></div></div>';
     Promise.resolve(PAGES[page]()).catch(err => {
-      if (err && err.status === 401) return;
+      if (isAuthError(err)) {
+        showLogin('Forkert eller udløbet adgangstoken. Prøv igen.');
+        return;
+      }
       const msg = err && err.message ? err.message : 'Siden kunne ikke indlæses';
       content.innerHTML = `
         <div class="empty-state" style="margin:32px">
@@ -1649,6 +1668,11 @@
   }
 
   window.addEventListener('hashchange', route);
+  window.addEventListener('unhandledrejection', event => {
+    if (!isAuthError(event.reason)) return;
+    event.preventDefault();
+    showLogin('Forkert eller udløbet adgangstoken. Prøv igen.');
+  });
 
   // Nav item clicks
   document.querySelectorAll('.nav-item[data-page]').forEach(a => {
@@ -1718,7 +1742,18 @@
     if (!adminToken) { showLogin(); return; }
     try {
       await api('/stats');          // validate stored token before showing the app
-    } catch (_) { return; }          // 401 handler shows login
+    } catch (err) {
+      if (isAuthError(err)) return;  // 401 handler shows login
+      const msg = err && err.message ? err.message : 'Admin kunne ikke indlæses';
+      content.innerHTML = `
+        <div class="empty-state" style="margin:32px">
+          <div class="es-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <h3>Admin kunne ikke indlæses</h3>
+          <p>${escHtml(msg)}</p>
+        </div>`;
+      toast(msg, 'error');
+      return;
+    }
     route();
   }
 

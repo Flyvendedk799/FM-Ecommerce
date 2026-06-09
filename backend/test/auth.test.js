@@ -121,6 +121,21 @@ test('public GET reads are 200 without token', async () => {
   }
 });
 
+test('admin shell and assets are served no-store with cache-busted assets', async () => {
+  const page = await j('/admin');
+  assert.strictEqual(page.status, 200);
+  assert.ok(page.contentType.includes('text/html'));
+  assert.match(page.headers.get('cache-control') || '', /no-store/);
+  assert.match(page.body, /\/admin\/admin\.css\?v=20260609-admin-auth-2/);
+  assert.match(page.body, /\/admin\/admin\.js\?v=20260609-admin-auth-2/);
+  assert.match(page.body, /id="confirm-overlay" hidden style="display:none"/);
+
+  const js = await j('/admin/admin.js?v=20260609-admin-auth-2');
+  assert.strictEqual(js.status, 200);
+  assert.match(js.headers.get('cache-control') || '', /no-store/);
+  assert.match(js.body, /unhandledrejection/);
+});
+
 test('public POST /api/bookings succeeds with NO token', async () => {
   const r = await j('/api/bookings', jsonReq('POST', {
     customer_name: 'Public Person',

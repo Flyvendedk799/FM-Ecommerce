@@ -109,6 +109,17 @@ test('course filters: category, status, q', async () => {
   await j('/api/courses/' + draftId, { method: 'DELETE', headers: ADMIN });
 });
 
+test('course list includes upcoming availability metadata', async () => {
+  const r = await j('/api/courses?status=active');
+  assert.strictEqual(r.status, 200);
+  const withDates = r.body.find(c => c.upcoming_session_count > 0);
+  assert.ok(withDates, 'seeded active courses expose upcoming sessions');
+  assert.match(withDates.next_session_date, /^\d{4}-\d{2}-\d{2}$/);
+  assert.strictEqual(typeof withDates.upcoming_session_count, 'number');
+  assert.strictEqual(typeof withDates.next_session_seats_remaining, 'number');
+  assert.strictEqual(typeof withDates.min_seats_remaining, 'number');
+});
+
 /* ---- 15. Sessions enrichment + course_id filter ---- */
 test('GET /api/sessions?course_id=1 enriched with day/month/year + numeric seats_remaining', async () => {
   const r = await j('/api/sessions?course_id=1');

@@ -123,7 +123,7 @@
         <button class="bm-close" id="bm-close" aria-label="Luk">×</button>
       </div>
       <div class="bm-summary" id="bm-summary">
-        <div class="bm-sum-icon">📅</div>
+        <div class="bm-sum-icon" id="bm-sum-icon">📅</div>
         <div>
           <div class="bm-sum-title" id="bm-sum-title">Kursus</div>
           <div class="bm-sum-meta" id="bm-sum-meta">Dato &amp; lokation</div>
@@ -163,7 +163,13 @@
             </select>
           </div>
         </div>
-        <div class="bm-payment">
+        <div class="form-row full" id="bm-message-row" hidden>
+          <div class="bm-field">
+            <label for="bm-message">Kort om dit behov</label>
+            <textarea class="bm-input bm-textarea" id="bm-message" rows="3" placeholder="F.eks. ønsket by, dato eller hvad teamet skal træne"></textarea>
+          </div>
+        </div>
+        <div class="bm-payment" id="bm-payment-wrap">
           <label>Betalingsmetode</label>
           <div class="bm-pay-opts">
             <input class="bm-pay-opt" type="radio" name="payment" id="pay-faktura" value="faktura" checked>
@@ -182,6 +188,7 @@
         </div>
       </form>
       <div class="bm-footer">
+        <div class="bm-error" id="bm-error" role="status" aria-live="polite" hidden></div>
         <button class="bm-submit" id="bm-submit" type="button">
           Reservér plads <span class="arrow">→</span>
         </button>
@@ -198,10 +205,10 @@
         <div class="bm-success-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
         </div>
-        <h2>Tak for din tilmelding!</h2>
-        <p>Vi har modtaget din anmodning og sender en bekræftelse til <b id="bm-confirm-email"></b> inden for 24 timer.</p>
+        <h2 id="bm-success-title">Tak for din tilmelding!</h2>
+        <p id="bm-success-copy">Vi har modtaget din anmodning og sender en bekræftelse til <b id="bm-confirm-email"></b> inden for 24 timer.</p>
         <div class="bm-success-ref">
-          <div class="ref-label">Bookingsreference</div>
+          <div class="ref-label" id="bm-ref-label">Bookingsreference</div>
           <div class="ref-num" id="bm-ref-num">FM-0000</div>
         </div>
         <p style="font-size:13px">Vores team kontakter dig med betalingsinformation og praktiske detaljer om kurset.</p>

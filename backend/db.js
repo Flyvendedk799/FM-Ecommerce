@@ -1,9 +1,11 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, 'futurematch.db');
+// Env-overridable so tests can use ':memory:' and never touch the real DB.
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'futurematch.db');
 const db = new Database(DB_PATH);
 
+// WAL only applies to file-backed DBs; ':memory:' ignores it harmlessly.
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -90,6 +92,32 @@ db.exec(`
     status TEXT DEFAULT 'pending',
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS inquiries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT DEFAULT 'contact',          -- contact | firmahold | notify | udbyder
+    name TEXT DEFAULT '',
+    email TEXT NOT NULL,
+    phone TEXT DEFAULT '',
+    company TEXT DEFAULT '',
+    subject TEXT DEFAULT '',
+    message TEXT DEFAULT '',
+    course_id INTEGER REFERENCES courses(id) ON DELETE SET NULL,
+    course_title TEXT DEFAULT '',
+    participants INTEGER,
+    status TEXT DEFAULT 'new',            -- new | handled
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
+  /* ---- indexes on foreign keys / hot filters ---- */
+  CREATE INDEX IF NOT EXISTS idx_courses_supplier  ON courses(supplier_id);
+  CREATE INDEX IF NOT EXISTS idx_courses_category  ON courses(category_id);
+  CREATE INDEX IF NOT EXISTS idx_courses_status    ON courses(status);
+  CREATE INDEX IF NOT EXISTS idx_sessions_course   ON sessions(course_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_session  ON bookings(session_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status);
+  CREATE INDEX IF NOT EXISTS idx_inquiries_course  ON inquiries(course_id);
+  CREATE INDEX IF NOT EXISTS idx_inquiries_status  ON inquiries(status);
 `);
 
 /* ============ SEED DATA ============ */
@@ -313,7 +341,7 @@ function seed() {
   `);
   const course1Id = db.prepare('SELECT id FROM courses WHERE slug=?').get('forhandlingsteknik').id;
   const sessionData = [
-    [course1Id, '2026-06-12', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 4, 0],
+    [course1Id, '2026-06-12', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 8, 0],
     [course1Id, '2026-09-03', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 11, 1],
     [course1Id, '2026-11-19', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 14, 0],
     [course1Id, '2026-08-27', 'Aarhus',    'Comwell Aarhus',         'Fysisk · 1 dag', 0, 9, 1],
@@ -340,5 +368,81 @@ function seed() {
 }
 
 seed();
+
+/* ============ SESSION BACKFILL ============
+   Idempotent: gives every active course a realistic spread of upcoming
+   sessions. Only inserts for courses that currently have none, so it is
+   safe to run on every boot and never duplicates or touches existing data
+   (incl. the hand-tuned Forhandlingsteknik sessions and sample bookings). */
+function backfillSessions() {
+  const VENUES = {
+    'København': 'Tivoli Congress Center',
+    'Aarhus':    'Comwell Aarhus',
+    'Odense':    'H.C. Andersen Hotel',
+    'Aalborg':   'Comwell Hvide Hus',
+    'Online':    'Live via Zoom',
+  };
+
+  function dateInDays(offset) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+
+  const insertSession = db.prepare(`
+    INSERT INTO sessions (course_id, date, location, venue, format, is_online, seats, is_popular)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const courses = db.prepare("SELECT id, duration, format, is_online FROM courses WHERE status='active'").all();
+
+  const insertMany = db.transaction(() => {
+    courses.forEach(course => {
+      const existing = db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE course_id=?').get(course.id).n;
+      if (existing > 0) return; // never clobber courses that already have dates
+
+      const dur     = course.duration || '1 dag';
+      const shift   = (course.id * 5) % 21;           // spread courses apart so dates differ
+      const seatPool = [4, 6, 9, 12, 14, 18, 24, 30];
+      const onlineFmt   = 'Online · ' + dur;
+      const physicalFmt = 'Fysisk · ' + dur;
+
+      let plan;
+      if (course.format === 'Online') {
+        // online-only course
+        plan = [
+          ['Online', dateInDays(21 + shift), onlineFmt, 1, 0],
+          ['Online', dateInDays(49 + shift), onlineFmt, 1, 1],
+          ['Online', dateInDays(84 + shift), onlineFmt, 1, 0],
+        ];
+      } else {
+        // physical course — spread across DK cities
+        plan = [
+          ['København', dateInDays(25 + shift), physicalFmt, 0, 0],
+          ['København', dateInDays(67 + shift), physicalFmt, 0, 1],
+          ['Aarhus',     dateInDays(40 + shift), physicalFmt, 0, 0],
+          ['Aarhus',     dateInDays(88 + shift), physicalFmt, 0, 0],
+          ['Odense',     dateInDays(54 + shift), physicalFmt, 0, 0],
+        ];
+        // courses that also run online get live online dates
+        if (course.is_online) {
+          plan.push(['Online', dateInDays(33 + shift), onlineFmt, 1, 0]);
+          plan.push(['Online', dateInDays(75 + shift), onlineFmt, 1, 1]);
+        }
+      }
+
+      plan.forEach((p, i) => {
+        const [location, date, format, isOnline, popular] = p;
+        const seats = seatPool[(course.id + i) % seatPool.length];
+        insertSession.run(course.id, date, location, VENUES[location] || location, format, isOnline, seats, popular);
+      });
+    });
+  });
+
+  insertMany();
+}
+
+backfillSessions();
 
 module.exports = db;

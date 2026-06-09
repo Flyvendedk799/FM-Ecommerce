@@ -73,7 +73,8 @@
   const LOC_KEY_MAP = { 'København':'kbh', 'Aarhus':'aarhus', 'Odense':'odense', 'Aalborg':'aalborg', 'Online':'online' };
 
   const list = document.getElementById('session-list');
-  const tabs = document.querySelectorAll('.loc-tab');
+  const locTabs = document.getElementById('loc-tabs');
+  let tabs = Array.prototype.slice.call(document.querySelectorAll('.loc-tab'));
   const sumLoc = document.getElementById('sum-loc');
   const sumDate = document.getElementById('sum-date');
   const sumFormat = document.getElementById('sum-format');
@@ -81,6 +82,11 @@
   const sbSub = document.getElementById('sb-sub');
   let current = 'kbh';
   let selectedSessionId = null;
+
+  if (list) {
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', 'Vælg en dato og lokation');
+  }
 
   function setScarcity(seats) {
     if (!sumScarcity) return;
@@ -93,8 +99,14 @@
   }
 
   function pickSession(card) {
-    list.querySelectorAll('.session').forEach(s => s.setAttribute('aria-selected', 'false'));
+    list.querySelectorAll('.session').forEach(s => {
+      s.setAttribute('aria-selected', 'false');
+      s.setAttribute('aria-checked', 'false');
+      s.tabIndex = -1;
+    });
     card.setAttribute('aria-selected', 'true');
+    card.setAttribute('aria-checked', 'true');
+    card.tabIndex = 0;
     const dt = card.dataset;
     selectedSessionId = dt.sessionId ? parseInt(dt.sessionId, 10) : null;
     sumLoc.textContent = dt.loc;
@@ -102,6 +114,15 @@
     sumFormat.textContent = dt.format;
     sbSub.textContent = `${dt.loc} · ${parseInt(dt.day, 10)}. ${MONTH_FULL[dt.month] || dt.month} · ${dt.online === 'true' ? 'Online' : 'Fysisk'}`;
     setScarcity(dt.seats ? parseInt(dt.seats, 10) : null);
+  }
+
+  // Move selection+focus to a sibling session row (keyboard arrow nav).
+  function moveSession(current, dir) {
+    const rows = Array.prototype.slice.call(list.querySelectorAll('.session'));
+    const idx = rows.indexOf(current);
+    if (idx < 0) return;
+    const next = rows[(idx + dir + rows.length) % rows.length];
+    if (next) { pickSession(next); next.focus(); }
   }
 
   function renderLoc(loc) {
@@ -127,8 +148,10 @@
     data.forEach((s, i) => {
       const el = document.createElement('div');
       el.className = 'session';
-      el.setAttribute('role', 'button');
+      el.setAttribute('role', 'radio');
       el.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+      el.setAttribute('aria-checked', i === 0 ? 'true' : 'false');
+      el.tabIndex = i === 0 ? 0 : -1;
       el.dataset.loc = s.loc; el.dataset.day = s.d; el.dataset.month = s.m;
       el.dataset.format = s.format; el.dataset.online = String(s.online); el.dataset.seats = s.seats;
       if (s.id) el.dataset.sessionId = s.id;
@@ -146,20 +169,73 @@
         <div class="session-seats">${seatTxt}</div>
         <span class="session-radio"></span>`;
       el.addEventListener('click', () => pickSession(el));
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          e.preventDefault();
+          pickSession(el);
+        } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          moveSession(el, 1);
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          moveSession(el, -1);
+        }
+      });
       list.appendChild(el);
     });
     const first = list.querySelector('.session');
     if (first) pickSession(first);
   }
 
-  tabs.forEach(t => {
-    t.addEventListener('click', () => {
-      tabs.forEach(x => x.setAttribute('aria-selected', 'false'));
-      t.setAttribute('aria-selected', 'true');
-      renderLoc(t.dataset.loc);
+  function setActiveTab(t) {
+    tabs.forEach(x => { x.setAttribute('aria-selected', 'false'); x.tabIndex = -1; });
+    t.setAttribute('aria-selected', 'true');
+    t.tabIndex = 0;
+    renderLoc(t.dataset.loc);
+  }
+
+  // (Re)bind click + keyboard handlers across the current tab set. Roving
+  // tabindex + ArrowLeft/Right/Home/End make the tablist keyboard operable.
+  function bindTabs() {
+    tabs.forEach((t, i) => {
+      t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1;
+      t.addEventListener('click', () => setActiveTab(t));
+      t.addEventListener('keydown', e => {
+        let target = null;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') target = tabs[(i + 1) % tabs.length];
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') target = tabs[(i - 1 + tabs.length) % tabs.length];
+        else if (e.key === 'Home') target = tabs[0];
+        else if (e.key === 'End') target = tabs[tabs.length - 1];
+        if (target) { e.preventDefault(); setActiveTab(target); target.focus(); }
+      });
     });
-  });
+  }
+  bindTabs();
   renderLoc('kbh');
+
+  // Rebuild the location tablist from a live set of keys so sessions whose
+  // location has no matching static tab are never hidden. Each key maps to a
+  // SESSIONS bucket; the label prefers the human location name when available.
+  function rebuildTabs(keys, labels) {
+    if (!locTabs) return;
+    locTabs.innerHTML = '';
+    keys.forEach((k, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'loc-tab';
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+      btn.dataset.loc = k;
+      btn.innerHTML = '<span class="lpin"></span>' + escHtml(labels[k] || k);
+      locTabs.appendChild(btn);
+    });
+    tabs = Array.prototype.slice.call(locTabs.querySelectorAll('.loc-tab'));
+    bindTabs();
+  }
+
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   // Fetch live sessions from API and re-render
   fetch('/api/sessions?course_id=1')
@@ -167,14 +243,34 @@
     .then(function(sessions) {
       if (!sessions || !sessions.length) return;
       const built = { kbh:[], aarhus:[], odense:[], aalborg:'contact', online:[] };
+      const labels = { kbh:'København', aarhus:'Aarhus', odense:'Odense', aalborg:'Aalborg', online:'Online' };
+      // Track order of appearance for tabs we have to add dynamically.
+      const dynamicKeys = [];
       sessions.forEach(function(s) {
-        const key = LOC_KEY_MAP[s.location] || s.location.toLowerCase().replace(/\s/g, '');
+        // Guard: a null/undefined location must not throw and abort the re-render.
+        const locName = s.location || '';
+        const key = LOC_KEY_MAP[locName] || (locName.toLowerCase().replace(/\s/g, '') || 'andre');
         if (!built[key] || built[key] === 'contact') built[key] = [];
-        built[key].push({ id: s.id, d: s.day, m: s.month, loc: s.location, venue: s.venue || '', format: s.format, online: Boolean(s.is_online), seats: s.seats, popular: Boolean(s.is_popular) });
+        if (!labels[key]) { labels[key] = locName || 'Andre datoer'; }
+        if (!LOC_KEY_MAP[locName] && dynamicKeys.indexOf(key) < 0 && !({kbh:1,aarhus:1,odense:1,aalborg:1,online:1}[key])) {
+          dynamicKeys.push(key);
+        }
+        const seats = (s.seats_remaining != null ? s.seats_remaining : s.seats);
+        built[key].push({ id: s.id, d: s.day, m: s.month, loc: locName, venue: s.venue || '', format: s.format, online: Boolean(s.is_online), seats: seats, popular: Boolean(s.is_popular) });
       });
       // only use aalborg 'contact' if no sessions found there
       if (!Array.isArray(built.aalborg) || !built.aalborg.length) built.aalborg = 'contact';
       SESSIONS = built;
+
+      // Rebuild the tablist so every location with live inventory is reachable:
+      // keep the known order, then append any unmapped/dynamic locations.
+      const orderedKeys = ['kbh','aarhus','odense','aalborg','online']
+        .filter(k => Array.isArray(built[k]) ? built[k].length : built[k] === 'contact')
+        .concat(dynamicKeys.filter(k => Array.isArray(built[k]) && built[k].length));
+      if (orderedKeys.length) {
+        rebuildTabs(orderedKeys, labels);
+        current = orderedKeys.indexOf(current) >= 0 ? current : orderedKeys[0];
+      }
       renderLoc(current);
     })
     .catch(function() {});
@@ -184,23 +280,59 @@
      ============================================================ */
   const bookingOverlay = document.getElementById('booking-overlay');
   const bookingCta     = document.getElementById('booking-cta');
+  let bookingLastFocused = null;
+
+  const BM_FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+  function bmActivePanel() {
+    const success = document.getElementById('bm-success-step');
+    const form    = document.getElementById('bm-form-step');
+    if (success && !success.hidden) return success;
+    return form || bookingOverlay;
+  }
+  function bmFocusables() {
+    const panel = bmActivePanel() || bookingOverlay;
+    return Array.prototype.slice.call(panel.querySelectorAll(BM_FOCUSABLE))
+      .filter(function(el){ return el.offsetWidth || el.offsetHeight || el.getClientRects().length; });
+  }
+
+  // Hide the rest of the page from AT + tab order while the modal is open.
+  function bmSetChromeInert(on) {
+    Array.prototype.forEach.call(document.body.children, function(el) {
+      if (el === bookingOverlay) return;
+      if (on) {
+        if ('inert' in HTMLElement.prototype) el.inert = true;
+        else el.setAttribute('aria-hidden', 'true');
+      } else {
+        if ('inert' in HTMLElement.prototype) el.inert = false;
+        else el.removeAttribute('aria-hidden');
+      }
+    });
+  }
 
   function openBookingModal() {
     if (!bookingOverlay) return;
+    bookingLastFocused = document.activeElement;
     const title = document.getElementById('bm-sum-title');
     const meta  = document.getElementById('bm-sum-meta');
     if (title) title.textContent = 'Forhandlingsteknik';
     if (meta)  meta.textContent  = (sumDate ? sumDate.textContent : '') + ' · ' + (sumLoc ? sumLoc.textContent : '');
     bookingOverlay.hidden = false;
     document.body.style.overflow = 'hidden';
+    bmSetChromeInert(true);
+    // Move focus into the modal — close button first, falling back to name field.
+    const closeBtn = document.getElementById('bm-close');
     const nameField = document.getElementById('bm-name');
-    if (nameField) setTimeout(function() { nameField.focus(); }, 50);
+    setTimeout(function() { (closeBtn || nameField || bookingOverlay).focus(); }, 50);
   }
 
   function closeBookingModal() {
     if (!bookingOverlay) return;
     bookingOverlay.hidden = true;
     document.body.style.overflow = '';
+    bmSetChromeInert(false);
+    if (bookingLastFocused && typeof bookingLastFocused.focus === 'function') bookingLastFocused.focus();
+    bookingLastFocused = null;
   }
 
   if (bookingCta) bookingCta.addEventListener('click', openBookingModal);
@@ -218,6 +350,19 @@
 
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape' && !bookingOverlay.hidden) closeBookingModal();
+    });
+
+    // Trap Tab / Shift+Tab within the visible modal step.
+    bookingOverlay.addEventListener('keydown', function(e) {
+      if (e.key !== 'Tab' || bookingOverlay.hidden) return;
+      const f = bmFocusables();
+      if (!f.length) { e.preventDefault(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
     });
 
     document.getElementById('bm-submit').addEventListener('click', function() {
@@ -244,16 +389,17 @@
           session_id:        selectedSessionId,
           customer_name:     name,
           customer_email:    email,
-          customer_company:  document.getElementById('bm-company').value.trim(),
-          customer_phone:    document.getElementById('bm-phone').value.trim(),
-          participants:      parseInt(document.getElementById('bm-participants').value, 10),
+          customer_company:  document.getElementById('bm-company')?.value.trim() || '',
+          customer_phone:    document.getElementById('bm-phone')?.value.trim() || '',
+          participants:      parseInt(document.getElementById('bm-participants')?.value, 10) || 1,
           payment_method:    payEl ? payEl.value : 'faktura'
         })
       })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+      .then(function(res) {
+        if (!res.ok || !res.d.id) throw new Error(res.d.error || 'Booking fejlede');
         document.getElementById('bm-confirm-email').textContent = email;
-        document.getElementById('bm-ref-num').textContent = 'FM-' + String(data.id || 0).padStart(4, '0');
+        document.getElementById('bm-ref-num').textContent = 'FM-' + String(res.d.id).padStart(4, '0');
         document.getElementById('bm-form-step').hidden = true;
         document.getElementById('bm-success-step').hidden = false;
       })

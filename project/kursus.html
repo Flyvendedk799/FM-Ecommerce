@@ -4,10 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kursus — Futurematch</title>
-<meta name="description" content="">
+<meta name="description" content="Se kursusdetaljer, datoer og lokationer hos Futurematch — Danmarks kursusmarkedsplads. Sammenlign hold, vælg dato og reservér din plads uden binding.">
+<link rel="canonical" href="kursus.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="Kursus — Futurematch">
+<meta property="og:description" content="Se kursusdetaljer, datoer og lokationer hos Futurematch. Sammenlign hold, vælg dato og reservér din plads uden binding.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Futurematch">
+<meta property="og:image" content="/favicon.svg">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kursus — Futurematch">
+<meta name="twitter:description" content="Se kursusdetaljer, datoer og lokationer hos Futurematch. Sammenlign hold, vælg dato og reservér din plads uden binding.">
+<meta name="twitter:image" content="/favicon.svg">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<a class="skip-link" href="#main">Spring til indhold</a>
 
 <nav class="nav" id="nav">
   <a class="brand" href="Landing.html">
@@ -22,6 +35,9 @@
   </div>
   <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
 </nav>
+
+<!-- Primary content landmark (kursus.js injects its own <main id="top"> into #kursus-content) -->
+<div id="main" role="main">
 
 <!-- Loading -->
 <div id="kursus-loading" class="kursus-loading">
@@ -41,6 +57,8 @@
 <!-- Main content — rendered by kursus.js -->
 <div id="kursus-content" hidden></div>
 
+</div>
+
 <footer class="footer wrap" id="site-footer">
   <div class="footer-top">
     <div class="footer-brand">
@@ -58,16 +76,16 @@
       </div>
       <div class="footer-col">
         <h4>Futurematch</h4>
-        <a href="Landing.html">Om os</a>
         <a href="Landing.html#for-udbydere">For udbydere</a>
-        <a href="#">Firmahold</a>
-        <a href="#">Kontakt</a>
+        <a href="Firmahold.html">Firmahold</a>
+        <a href="Kontakt.html">Kontakt</a>
       </div>
       <div class="footer-col">
         <h4>Hjælp</h4>
-        <a href="#">Ofte stillede spørgsmål</a>
-        <a href="#">Afbestilling</a>
-        <a href="#">Handelsbetingelser</a>
+        <a href="FAQ.html">Ofte stillede spørgsmål</a>
+        <a href="FAQ.html#afbestilling">Afbestilling</a>
+        <a href="Handelsbetingelser.html">Handelsbetingelser</a>
+        <a href="Privatlivspolitik.html">Privatlivspolitik</a>
       </div>
     </div>
   </div>

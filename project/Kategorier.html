@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kurser — Futurematch</title>
+<meta name="description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris inden for ledelse, IT & data, certificering, sundhed, AMU og salg.">
+<link rel="canonical" href="Kategorier.html">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="Kurser — Futurematch">
+<meta property="og:description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Futurematch">
+<meta property="og:image" content="/favicon.svg">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kurser — Futurematch">
+<meta name="twitter:description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris.">
+<meta name="twitter:image" content="/favicon.svg">
 <link rel="stylesheet" href="styles.css">
 <style>
 /* ============================================================
@@ -26,7 +38,7 @@
 .kat-header { padding-top: 150px; padding-bottom: clamp(44px,6vw,80px); background: var(--ink); position: relative; overflow: hidden; }
 .kat-header::after { content:""; position:absolute; bottom:0; left:0; right:0; height:80px; background:linear-gradient(to bottom,transparent,var(--paper)); pointer-events:none; }
 .kat-header-inner { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding-inline: var(--gutter); }
-.kat-header .eyebrow { color: rgba(237,230,214,.5); }
+.kat-header .eyebrow { color: rgba(237,230,214,.66); }
 .kat-h1 { font-family: var(--serif); font-size: clamp(2.2rem,7vw,6.4rem); font-weight: 400; line-height: .98; color: var(--paper); margin-top: 18px; letter-spacing: -.02em; }
 .kat-h1 .ital { font-style: italic; color: var(--accent); }
 
@@ -37,7 +49,7 @@
 .kat-search input::placeholder { color:rgba(237,230,214,.38); }
 .kat-search button { background:var(--accent); color:var(--on-accent); font-weight:700; font-size:14px; padding:12px 22px; margin:5px; border-radius:100px; flex-shrink:0; white-space:nowrap; transition:background .2s,transform .25s var(--ease); }
 .kat-search button:hover { background:var(--accent-deep); transform:scale(1.04); }
-.kat-total { margin-top:16px; font-size:14px; color:rgba(237,230,214,.45); }
+.kat-total { margin-top:16px; font-size:14px; color:rgba(237,230,214,.62); }
 
 /* ---- overview category cards ---- */
 .kat-overview { padding-block: clamp(54px,7vw,100px); }
@@ -62,14 +74,14 @@
 .cat-view-header { padding-top: 140px; padding-bottom: 40px; background: var(--ink); position: relative; }
 .cat-view-header::after { content:""; position:absolute; bottom:0; left:0; right:0; height:60px; background:linear-gradient(to bottom,transparent,var(--paper)); pointer-events:none; }
 .cat-view-header .wrap { position:relative; z-index:1; }
-.cat-breadcrumb { display:flex; align-items:center; gap:10px; font-size:13.5px; color:rgba(237,230,214,.5); margin-bottom:22px; }
-.cat-breadcrumb a { color:rgba(237,230,214,.5); text-decoration:none; transition:color .2s; }
+.cat-breadcrumb { display:flex; align-items:center; gap:10px; font-size:13.5px; color:rgba(237,230,214,.66); margin-bottom:22px; }
+.cat-breadcrumb a { color:rgba(237,230,214,.66); text-decoration:none; transition:color .2s; }
 .cat-breadcrumb a:hover { color:var(--paper); }
 .cat-breadcrumb .sep { color:rgba(237,230,214,.3); }
 .cat-view-title { font-family:var(--serif); font-size:clamp(2rem,5.5vw,5rem); font-weight:400; line-height:.98; color:var(--paper); letter-spacing:-.02em; }
-.cat-view-desc { font-size:1.05rem; color:rgba(237,230,214,.65); margin-top:16px; max-width:50ch; }
+.cat-view-desc { font-size:1.05rem; color:rgba(237,230,214,.8); margin-top:16px; max-width:50ch; }
 .cat-view-meta { display:flex; align-items:center; gap:16px; margin-top:22px; flex-wrap:wrap; }
-.cat-view-count { font-size:13.5px; color:rgba(237,230,214,.5); }
+.cat-view-count { font-size:13.5px; color:rgba(237,230,214,.62); }
 .cat-accent-chip { display:inline-flex; align-items:center; gap:7px; padding:7px 14px; border-radius:100px; font-size:12.5px; font-weight:700; }
 
 /* filter bar */
@@ -154,6 +166,8 @@
 </head>
 <body class="dark-nav">
 
+<a class="skip-link" href="#kat-view">Spring til indhold</a>
+
 <nav class="nav" id="nav">
   <a class="brand" href="Landing.html">
     <span class="brand-mark"></span>Futurematch
@@ -187,14 +201,15 @@
         <h4>Futurematch</h4>
         <a href="Landing.html">Forside</a>
         <a href="Landing.html#for-udbydere">For udbydere</a>
-        <a href="#">Firmahold</a>
-        <a href="#">Kontakt</a>
+        <a href="Firmahold.html">Firmahold</a>
+        <a href="Kontakt.html">Kontakt</a>
       </div>
       <div class="footer-col">
         <h4>Hjælp</h4>
-        <a href="#">FAQ</a>
-        <a href="#">Afbestilling</a>
-        <a href="#">Handelsbetingelser</a>
+        <a href="FAQ.html">FAQ</a>
+        <a href="FAQ.html#afbestilling">Afbestilling</a>
+        <a href="Handelsbetingelser.html">Handelsbetingelser</a>
+        <a href="Privatlivspolitik.html">Privatlivspolitik</a>
       </div>
     </div>
   </div>

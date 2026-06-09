@@ -24,6 +24,7 @@
 
   /* ---- Helpers ---- */
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function safeColor(v){ return /^#[0-9a-fA-F]{3,8}$/.test(String(v||'')) ? v : '#2C1A0A'; }
 
   function fmtDateFull(dateStr) {
     if (!dateStr) return '';
@@ -93,7 +94,7 @@
     try {
       const [course, sessions] = await Promise.all([
         fetch('/api/courses/' + courseId).then(r => { if (!r.ok) throw new Error('Kurset findes ikke'); return r.json(); }),
-        fetch('/api/sessions?course_id=' + courseId).then(r => r.json()),
+        fetch('/api/sessions?course_id=' + courseId).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       // Fetch up to 4 related courses from same category
@@ -120,7 +121,7 @@
     document.title = course.title + ' — Futurematch';
     document.querySelector('meta[name="description"]')?.setAttribute('content', course.short_description || '');
 
-    const accent     = course.category_accent || '#FF5A1F';
+    const accent     = /^#[0-9a-fA-F]{3,8}$/.test(String(course.category_accent || '')) ? course.category_accent : '#FF5A1F';
     const accentDeep = shadeColor(accent, -0.15);
     document.documentElement.style.setProperty('--accent', accent);
     document.documentElement.style.setProperty('--accent-deep', accentDeep);
@@ -164,6 +165,7 @@
     initBookingModal(course);
     initParallax();
     initRailFill();
+    initNotify(course);
 
     // Breadcrumb back link
     const bcBack = document.getElementById('breadcrumb-back');
@@ -287,7 +289,7 @@ ${badge === 'amu' ? `
       <div class="amu-title">Staten finansierer kurset for berettigede deltagere</div>
       <div class="amu-desc">Lønmodtagere, ledige og selvstændige kan deltage gratis eller mod reduceret betaling via AMU-ordningen.</div>
     </div>
-    <a class="amu-cta" href="#">Tjek om du er berettiget <span class="arrow">→</span></a>
+    <a class="amu-cta" href="Kontakt.html?emne=amu">Tjek om du er berettiget <span class="arrow">→</span></a>
   </div>
 </div>` : ''}
 
@@ -489,8 +491,8 @@ ${related.length > 0 ? `
   </div>
   <div class="related-grid reveal reveal-d1">
     ${related.map(r => `
-    <a class="rc-card" href="kursus.html?id=${r.id}">
-      <div class="rc-top" style="background:${esc(r.color||'#2C2819')}">
+    <a class="rc-card" href="kursus.html?id=${+r.id}">
+      <div class="rc-top" style="background:${safeColor(r.color)}">
         <span class="rc-cat">${esc((r.category_label||'').split(' ')[0])}</span>
         <span class="rc-rating"><span class="rc-star">★</span> ${r.rating?(+r.rating).toFixed(1).replace('.',','):'—'}</span>
         <span class="rc-go" aria-hidden="true">→</span>
@@ -528,13 +530,21 @@ ${related.length > 0 ? `
   function initSessionPicker(byLoc, locKeys, course) {
     if (!locKeys.length) return;
 
-    const tabs    = document.querySelectorAll('.loc-tab');
+    const tabs    = Array.prototype.slice.call(document.querySelectorAll('.loc-tab'));
     const list    = document.getElementById('session-list');
     const sumLoc  = document.getElementById('sum-loc');
     const sumDate = document.getElementById('sum-date');
     const sumFmt  = document.getElementById('sum-format');
     const scarc   = document.getElementById('sum-scarcity');
     const sbSub   = document.getElementById('sb-sub');
+
+    // Prefer real remaining capacity over total seats when the API provides it.
+    function seatsOf(s) { return s.seats_remaining != null ? s.seats_remaining : s.seats; }
+
+    if (list) {
+      list.setAttribute('role', 'radiogroup');
+      list.setAttribute('aria-label', 'Vælg en dato og lokation');
+    }
 
     function setScarcity(seats) {
       if (!scarc) return;
@@ -545,8 +555,14 @@ ${related.length > 0 ? `
     }
 
     function pickSession(card) {
-      document.querySelectorAll('.session').forEach(s => s.setAttribute('aria-selected', 'false'));
+      document.querySelectorAll('.session').forEach(s => {
+        s.setAttribute('aria-selected', 'false');
+        s.setAttribute('aria-checked', 'false');
+        s.tabIndex = -1;
+      });
       card.setAttribute('aria-selected', 'true');
+      card.setAttribute('aria-checked', 'true');
+      card.tabIndex = 0;
       const dt = card.dataset;
       selectedSession = { id: +dt.id, date: dt.date, location: dt.loc, format: dt.format };
       if (sumLoc)  sumLoc.textContent  = dt.loc;
@@ -554,6 +570,15 @@ ${related.length > 0 ? `
       if (sumFmt)  sumFmt.textContent  = dt.format;
       if (sbSub)   sbSub.textContent   = `${dt.loc} · ${fmtDateFull(dt.date)}`;
       setScarcity(dt.seats ? +dt.seats : null);
+    }
+
+    // Move selection+focus to a sibling session row (keyboard arrow nav).
+    function moveSession(current, dir) {
+      const rows = Array.prototype.slice.call(list.querySelectorAll('.session'));
+      const idx = rows.indexOf(current);
+      if (idx < 0) return;
+      const next = rows[(idx + dir + rows.length) % rows.length];
+      if (next) { pickSession(next); next.focus(); }
     }
 
     function renderLoc(locKey) {
@@ -564,19 +589,22 @@ ${related.length > 0 ? `
         const d = new Date(s.date);
         const day = String(d.getDate()).padStart(2,'0');
         const mon = M_ABBR[d.getMonth()];
-        const seatTxt = s.seats <= 4
-          ? `<span class="low">Kun ${s.seats} pladser</span>`
-          : `<b>${s.seats}</b> pladser`;
+        const seats = seatsOf(s);
+        const seatTxt = seats <= 4
+          ? `<span class="low">Kun ${seats} pladser</span>`
+          : `<b>${seats}</b> pladser`;
         const popTag = s.is_popular ? `<span class="session-pop">Populært</span>` : '';
         const el = document.createElement('div');
         el.className = 'session';
-        el.setAttribute('role', 'button');
+        el.setAttribute('role', 'radio');
         el.setAttribute('aria-selected', i===0 ? 'true' : 'false');
+        el.setAttribute('aria-checked', i===0 ? 'true' : 'false');
+        el.tabIndex = i===0 ? 0 : -1;
         el.dataset.id     = s.id;
         el.dataset.date   = s.date;
         el.dataset.loc    = s.location;
         el.dataset.format = s.format;
-        el.dataset.seats  = s.seats;
+        el.dataset.seats  = seats;
         el.dataset.online = String(!!s.is_online);
         el.innerHTML = `
           <div class="session-date"><div class="d">${day}</div><div class="m">${mon}</div></div>
@@ -588,17 +616,42 @@ ${related.length > 0 ? `
           <div class="session-seats">${seatTxt}</div>
           <span class="session-radio"></span>`;
         el.addEventListener('click', () => pickSession(el));
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+            e.preventDefault();
+            pickSession(el);
+          } else if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            moveSession(el, 1);
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            moveSession(el, -1);
+          }
+        });
         list.appendChild(el);
       });
       const first = list.querySelector('.session');
       if (first) pickSession(first);
     }
 
-    tabs.forEach(t => {
-      t.addEventListener('click', () => {
-        tabs.forEach(x => x.setAttribute('aria-selected', 'false'));
-        t.setAttribute('aria-selected', 'true');
-        renderLoc(t.dataset.loc);
+    // Move active location tab (keyboard arrow nav across the tablist).
+    function activateTab(t) {
+      tabs.forEach(x => { x.setAttribute('aria-selected', 'false'); x.tabIndex = -1; });
+      t.setAttribute('aria-selected', 'true');
+      t.tabIndex = 0;
+      renderLoc(t.dataset.loc);
+    }
+
+    tabs.forEach((t, i) => {
+      t.tabIndex = i===0 ? 0 : -1;
+      t.addEventListener('click', () => activateTab(t));
+      t.addEventListener('keydown', e => {
+        let target = null;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') target = tabs[(i+1) % tabs.length];
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') target = tabs[(i-1+tabs.length) % tabs.length];
+        else if (e.key === 'Home') target = tabs[0];
+        else if (e.key === 'End') target = tabs[tabs.length-1];
+        if (target) { e.preventDefault(); activateTab(target); target.focus(); }
       });
     });
 
@@ -664,8 +717,36 @@ ${related.length > 0 ? `
     const formStep   = document.getElementById('bm-form-step');
     const successStep= document.getElementById('bm-success-step');
     const submitBtn  = document.getElementById('bm-submit');
+    let lastFocused  = null;
+
+    const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+    // The currently visible modal step (form or success) — focus stays trapped within it.
+    function activePanel() {
+      return (successStep && !successStep.hidden) ? successStep : formStep;
+    }
+    function focusables() {
+      const panel = activePanel() || overlay;
+      return Array.prototype.slice.call(panel.querySelectorAll(FOCUSABLE))
+        .filter(el => el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+    }
+
+    // Hide the rest of the page from AT + tab order while the modal is open.
+    function setChromeInert(on) {
+      Array.prototype.forEach.call(document.body.children, el => {
+        if (el === overlay) return;
+        if (on) {
+          if ('inert' in HTMLElement.prototype) el.inert = true;
+          else el.setAttribute('aria-hidden', 'true');
+        } else {
+          if ('inert' in HTMLElement.prototype) el.inert = false;
+          else el.removeAttribute('aria-hidden');
+        }
+      });
+    }
 
     function openModal() {
+      lastFocused = document.activeElement;
       // Populate summary
       document.getElementById('bm-sum-title').textContent = course.title;
       const meta = selectedSession
@@ -678,12 +759,31 @@ ${related.length > 0 ? `
       successStep.hidden = true;
       overlay.hidden     = false;
       document.body.style.overflow = 'hidden';
-      document.getElementById('bm-name')?.focus();
+      setChromeInert(true);
+      // Move focus into the modal — close button first, falling back to title/name.
+      const closeBtn = document.getElementById('bm-close');
+      (closeBtn || document.getElementById('bm-name') || overlay)?.focus();
     }
 
     function closeModal() {
       overlay.hidden = true;
       document.body.style.overflow = '';
+      setChromeInert(false);
+      if (lastFocused && typeof lastFocused.focus === 'function') lastFocused.focus();
+      lastFocused = null;
+    }
+
+    // Trap Tab / Shift+Tab within the visible modal step.
+    function trapTab(e) {
+      if (e.key !== 'Tab' || overlay.hidden) return;
+      const f = focusables();
+      if (!f.length) { e.preventDefault(); return; }
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
     }
 
     // Open triggers
@@ -696,6 +796,7 @@ ${related.length > 0 ? `
     document.querySelectorAll('.bm-close-success').forEach(b => b.addEventListener('click', closeModal));
     overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeModal(); });
+    overlay.addEventListener('keydown', trapTab);
 
     // Submit
     submitBtn?.addEventListener('click', async () => {
@@ -753,19 +854,44 @@ ${related.length > 0 ? `
   }
 
   /* ============================================================
-     NOTIFY FORM (email capture)
+     NOTIFY FORM (email capture → /api/inquiries)
+     Bound after render, since the form is injected by renderPage.
   ============================================================ */
-  document.getElementById('notify-form')?.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const input = this.querySelector('input[type="email"]');
-    const btn   = this.querySelector('button');
-    if (!input || !input.value.trim()) return;
-    btn.textContent = 'Gemmer…';
-    btn.disabled = true;
-    // In production this would POST to a mailing list endpoint
-    await new Promise(r => setTimeout(r, 600));
-    this.innerHTML = '<div style="font-size:14px;font-weight:600;color:var(--accent-deep);padding:12px 0">✓ Du er tilmeldt. Vi giver besked!</div>';
-  });
+  function initNotify(course) {
+    const form = document.getElementById('notify-form');
+    if (!form) return;
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const input = form.querySelector('input[type="email"]');
+      const btn   = form.querySelector('button');
+      const email = input && input.value.trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (input) { input.style.borderColor = 'var(--accent)'; input.focus(); }
+        return;
+      }
+      btn.textContent = 'Gemmer…';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/inquiries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'notify',
+            email,
+            course_id: course ? course.id : null,
+            course_title: course ? course.title : '',
+            subject: 'Besked om nye datoer',
+          }),
+        });
+        if (!res.ok) throw new Error();
+        form.innerHTML = '<div style="font-size:14px;font-weight:600;color:var(--accent-deep);padding:12px 0">✓ Du er tilmeldt. Vi giver besked, når der kommer nye datoer!</div>';
+      } catch (_) {
+        btn.textContent = 'Hold mig opdateret';
+        btn.disabled = false;
+        alert('Tilmelding mislykkedes. Prøv igen om lidt.');
+      }
+    });
+  }
 
   /* ---- Shade color helper (darken accent for --accent-deep) ---- */
   function shadeColor(hex, pct) {

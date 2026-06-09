@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const requireAdmin = require('../middleware/requireAdmin');
+
+/* ---- auth: reads are public; writes are admin ---- */
+router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
 
 router.get('/', (req, res) => {
   const rows = db.prepare(`

@@ -622,6 +622,14 @@
           this._img.src = url;
           this._ghost.src = url;
         }
+        // Give the meaningful (clipped) image a sensible alt so it isn't
+        // invisible to assistive tech. Prefer an explicit data-label, then the
+        // descriptive document title (e.g. course name), then the slot id, and
+        // finally the placeholder caption as a last resort.
+        var label = this.getAttribute('data-label') ||
+          (document.title || '').split('—')[0].trim() ||
+          this.id || this.getAttribute('placeholder');
+        if (label) this._img.setAttribute('alt', label);
         this._img.style.display = 'block';
         this._empty.style.display = 'none';
         this.setAttribute('data-filled', '');

@@ -510,7 +510,7 @@ tbody td {
   animation: fadeIn .2s ease;
 }
 /* the display:grid above overrides the UA [hidden]{display:none}; restore it */
-.modal-overlay[hidden] { display: none; }
+.modal-overlay[hidden] { display: none !important; }
 @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
 
 .modal {

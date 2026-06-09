@@ -417,11 +417,17 @@
             <table id="courses-table">
               <thead><tr>
                 <th>Kursus</th><th>Leverandør</th><th>Kategori</th>
-                <th>Pris</th><th>Format</th><th>Rating</th><th>Status</th><th></th>
+                <th>Pris</th><th>Format</th><th>Næste hold</th><th>Rating</th><th>Status</th><th></th>
               </tr></thead>
               <tbody>
-                ${filtered.map(c => `
-                  <tr data-title="${escHtml(c.title.toLowerCase())}">
+                ${filtered.map(c => {
+                  const upcoming = Number(c.upcoming_session_count || 0);
+                  const seats = c.next_session_seats_remaining == null ? null : Number(c.next_session_seats_remaining);
+                  const nextMeta = c.next_session_date
+                    ? `<div class="td-title">${fmtDate(c.next_session_date)}</div><div class="td-sub">${upcoming} kommende hold${seats != null && seats <= 4 ? ' · ' + seats + ' pladser på næste' : ''}</div>`
+                    : '<div class="td-sub">Mangler datoer</div>';
+                  return `
+                  <tr data-search="${escHtml([c.title, c.supplier_name, c.category_label, c.status].join(' ').toLowerCase())}">
                     <td>
                       <div class="td-title">${escHtml(c.title)}</div>
                       <div class="td-sub">${escHtml(c.duration||'')}${c.is_online?' · Online':''}</div>
@@ -439,6 +445,7 @@
                     </td>
                     <td>${fmtPrice(c.price, c.badge)}</td>
                     <td style="font-size:13px;color:var(--muted)">${escHtml(c.format||'')}</td>
+                    <td>${nextMeta}</td>
                     <td>${fmtRating(c.rating, c.review_count)}</td>
                     <td>${statusBadge(c.status)}</td>
                     <td>
@@ -454,7 +461,8 @@
                         </button>
                       </div>
                     </td>
-                  </tr>`).join('')}
+                  </tr>`;
+                }).join('')}
               </tbody>
             </table>
           </div>`
@@ -465,7 +473,7 @@
     document.getElementById('course-search')?.addEventListener('input', e => {
       const q = e.target.value.toLowerCase();
       document.querySelectorAll('#courses-table tbody tr').forEach(row => {
-        row.style.display = !q || (row.dataset.title||'').includes(q) ? '' : 'none';
+        row.style.display = !q || (row.dataset.search||'').includes(q) ? '' : 'none';
       });
     });
 
@@ -1383,7 +1391,7 @@
       if (!list.length) return '<option value="">— ingen aktive hold —</option>';
       return list.map(s => {
         const rem = (s.seats_remaining != null) ? s.seats_remaining : s.seats;
-        return `<option value="${s.id}">${fmtDate(s.date)} · ${escHtml(s.location)} (${rem} tilbage)</option>`;
+        return `<option value="${s.id}" ${rem <= 0 ? 'disabled' : ''}>${fmtDate(s.date)} · ${escHtml(s.location)} (${rem <= 0 ? 'udsolgt' : rem + ' tilbage'})</option>`;
       }).join('');
     };
 
@@ -1416,8 +1424,10 @@
       const name = document.getElementById('bk-name').value.trim();
       const email = document.getElementById('bk-email').value.trim();
       if (!name || !email) { toast('Navn og e-mail er påkrævet', 'error'); return; }
+      const sessionId = document.getElementById('bk-session').value;
+      if (!sessionId) { toast('Vælg et aktivt hold med ledige pladser', 'error'); return; }
       const body = {
-        session_id: document.getElementById('bk-session').value || null,
+        session_id: sessionId,
         customer_name: name, customer_email: email,
         customer_company: document.getElementById('bk-company').value.trim(),
         customer_phone: document.getElementById('bk-phone').value.trim(),

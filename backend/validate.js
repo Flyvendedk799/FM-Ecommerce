@@ -2,7 +2,7 @@
    Shared input-validation helpers.
    Validators throw an Error with `.status` so the global error
    handler (app.js) returns a clean JSON 400 — no per-route try/catch
-   needed (better-sqlite3 is synchronous, so throws propagate).
+   needed (async routes are wrapped via middleware/wrapAsync).
    ============================================================ */
 
 function httpError(status, message) {

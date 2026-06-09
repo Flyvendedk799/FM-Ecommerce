@@ -1,18 +1,153 @@
-const Database = require('better-sqlite3');
+/* ============================================================
+   FUTUREMATCH — data-access layer (dual driver).
+   • Postgres (pg) when DATABASE_URL is set (managed prod DB).
+   • better-sqlite3 otherwise (zero-config dev fallback).
+   Public surface is async: all/get/run/transaction (+ ready/close).
+   SQL is written with `?` placeholders everywhere; the pg driver
+   rewrites them to $1..$n internally.
+   ============================================================ */
 const path = require('path');
+const fs = require('fs');
 
-// Env-overridable so tests can use ':memory:' and never touch the real DB.
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'futurematch.db');
-const db = new Database(DB_PATH);
+/* ============ SQLITE FILE RESOLUTION (fallback driver) ============
+   Precedence: DB_PATH (tests use ':memory:') → DATA_DIR/futurematch.db
+   (persistent, redeploy-safe dir injected by the host) → legacy
+   in-repo location. */
+const LEGACY_SQLITE_PATH = path.join(__dirname, 'futurematch.db');
 
-// WAL only applies to file-backed DBs; ':memory:' ignores it harmlessly.
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+function resolveSqlitePath(env = process.env) {
+  if (env.DB_PATH) return env.DB_PATH;
+  if (env.DATA_DIR) return path.join(env.DATA_DIR, 'futurematch.db');
+  return LEGACY_SQLITE_PATH;
+}
 
-/* ============ SCHEMA ============ */
-db.exec(`
+/* One-time seed migration: on first boot with an empty DATA_DIR, carry the
+   legacy in-repo DB file over so existing data survives the move. */
+function maybeSeedFromLegacy(targetPath, legacyPath = LEGACY_SQLITE_PATH) {
+  if (targetPath === ':memory:' || targetPath === legacyPath) return false;
+  if (fs.existsSync(targetPath) || !fs.existsSync(legacyPath)) return false;
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.copyFileSync(legacyPath, targetPath);
+  return true;
+}
+
+/* ============ DRIVERS ============
+   Each driver exposes the same async shape:
+   exec(sql) / all(sql, ...params) / get(...) / run(...) /
+   transaction(fn → called with a same-shaped executor) / close(). */
+
+function sqliteDriver() {
+  const Database = require('better-sqlite3');
+  const dbPath = resolveSqlitePath();
+  maybeSeedFromLegacy(dbPath);
+  const sq = new Database(dbPath);
+
+  // WAL only applies to file-backed DBs; ':memory:' ignores it harmlessly.
+  sq.pragma('journal_mode = WAL');
+  sq.pragma('foreign_keys = ON');
+
+  const driver = {
+    name: 'sqlite',
+    async exec(sql) { sq.exec(sql); },
+    async all(sql, ...params) { return sq.prepare(sql).all(...params); },
+    async get(sql, ...params) { return sq.prepare(sql).get(...params); },
+    async run(sql, ...params) {
+      const r = sq.prepare(sql).run(...params);
+      return { lastInsertRowid: r.lastInsertRowid, changes: r.changes };
+    },
+    // better-sqlite3 is synchronous underneath, so as long as the callback
+    // only awaits this layer's helpers the whole transaction runs within one
+    // event-loop turn and cannot interleave with other requests.
+    async transaction(fn) {
+      sq.exec('BEGIN IMMEDIATE');
+      try {
+        const out = await fn(driver);
+        sq.exec('COMMIT');
+        return out;
+      } catch (e) {
+        sq.exec('ROLLBACK');
+        throw e;
+      }
+    },
+    async close() { sq.close(); },
+  };
+  return driver;
+}
+
+function pgDriver() {
+  const { Pool, types } = require('pg');
+
+  // sqlite returns COUNT()/SUM() as numbers; node-pg returns int8/numeric as
+  // strings by default. Parse them so both drivers emit the same JSON.
+  types.setTypeParser(20, v => parseInt(v, 10));    // int8 (COUNT, SUM of int)
+  types.setTypeParser(1700, v => parseFloat(v));    // numeric
+
+  const url = process.env.DATABASE_URL;
+  const pool = new Pool({
+    connectionString: url,
+    // Managed providers commonly require TLS with a provider-signed cert.
+    ssl: /\bsslmode=require\b/.test(url) ? { rejectUnauthorized: false } : undefined,
+  });
+
+  // Rewrite `?` placeholders to $1..$n (no SQL in this app contains a literal '?').
+  const toPg = (sql) => { let i = 0; return sql.replace(/\?/g, () => '$' + (++i)); };
+  const isInsert = (sql) => /^\s*insert\b/i.test(sql);
+
+  function makeExec(q) { // q = pool or a checked-out client
+    const ex = {
+      name: 'pg',
+      async exec(sql) { await q.query(sql); },
+      async all(sql, ...params) { return (await q.query(toPg(sql), params)).rows; },
+      async get(sql, ...params) { return (await q.query(toPg(sql), params)).rows[0]; },
+      async run(sql, ...params) {
+        // Every table has an `id` PK; RETURNING id mirrors lastInsertRowid.
+        const text = isInsert(sql) && !/\breturning\b/i.test(sql) ? sql + ' RETURNING id' : sql;
+        const r = await q.query(toPg(text), params);
+        return {
+          lastInsertRowid: isInsert(sql) && r.rows[0] ? r.rows[0].id : undefined,
+          changes: r.rowCount,
+        };
+      },
+    };
+    return ex;
+  }
+
+  return {
+    ...makeExec(pool),
+    // SERIALIZABLE preserves the sqlite no-overbooking guarantee under
+    // concurrent writes; a 40001 serialization failure maps to 409 in app.js.
+    async transaction(fn) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
+        const out = await fn(makeExec(client));
+        await client.query('COMMIT');
+        return out;
+      } catch (e) {
+        try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+        throw e;
+      } finally {
+        client.release();
+      }
+    },
+    async close() { await pool.end(); },
+  };
+}
+
+/* ============ SCHEMA (idempotent, per-dialect) ============ */
+function schemaSql(isPg) {
+  const ID = isPg
+    ? 'INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY'
+    : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+  // Both drivers store TEXT timestamps in sqlite's 'YYYY-MM-DD HH:MM:SS' (UTC)
+  // format so ORDER BY created_at stays portable.
+  const NOW = isPg
+    ? "to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS')"
+    : "(datetime('now'))";
+
+  return `
   CREATE TABLE IF NOT EXISTS suppliers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     name TEXT NOT NULL,
     abbr TEXT DEFAULT '',
     email TEXT DEFAULT '',
@@ -22,11 +157,11 @@ db.exec(`
     rating REAL DEFAULT 0,
     review_count INTEGER DEFAULT 0,
     status TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT ${NOW}
   );
 
   CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     key TEXT UNIQUE NOT NULL,
     label TEXT NOT NULL,
     accent TEXT DEFAULT '#FF5A1F',
@@ -36,7 +171,7 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS courses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     title TEXT NOT NULL,
     slug TEXT,
     supplier_id INTEGER REFERENCES suppliers(id) ON DELETE SET NULL,
@@ -62,11 +197,11 @@ db.exec(`
     badge TEXT DEFAULT '',
     color TEXT DEFAULT '#2C1A0A',
     status TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT ${NOW}
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
     date TEXT NOT NULL,
     location TEXT NOT NULL,
@@ -76,11 +211,11 @@ db.exec(`
     seats INTEGER DEFAULT 14,
     is_popular INTEGER DEFAULT 0,
     status TEXT DEFAULT 'active',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT ${NOW}
   );
 
   CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
     customer_name TEXT NOT NULL,
     customer_email TEXT NOT NULL,
@@ -90,11 +225,11 @@ db.exec(`
     payment_method TEXT DEFAULT 'faktura',
     notes TEXT DEFAULT '',
     status TEXT DEFAULT 'pending',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT ${NOW}
   );
 
   CREATE TABLE IF NOT EXISTS inquiries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id ${ID},
     type TEXT DEFAULT 'contact',          -- contact | firmahold | notify | udbyder
     name TEXT DEFAULT '',
     email TEXT NOT NULL,
@@ -106,7 +241,7 @@ db.exec(`
     course_title TEXT DEFAULT '',
     participants INTEGER,
     status TEXT DEFAULT 'new',            -- new | handled
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT ${NOW}
   );
 
   /* ---- indexes on foreign keys / hot filters ---- */
@@ -118,17 +253,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_inquiries_course  ON inquiries(course_id);
   CREATE INDEX IF NOT EXISTS idx_inquiries_status  ON inquiries(status);
-`);
+  `;
+}
 
 /* ============ SEED DATA ============ */
-function seed() {
-  const catCount = db.prepare('SELECT COUNT(*) as n FROM categories').get().n;
+async function seed(x) {
+  const catCount = (await x.get('SELECT COUNT(*) as n FROM categories')).n;
   if (catCount > 0) return;
 
-  const insertCat = db.prepare(`
+  const insertCatSql = `
     INSERT INTO categories (key, label, accent, bg, description, sort_order)
     VALUES (?, ?, ?, ?, ?, ?)
-  `);
+  `;
   const cats = [
     ['ledelse', 'Ledelse & Kommunikation', '#FF5A1F', '#2C1A0A', 'Bliv en stærkere leder, kommunikator og forhandler. Kurser for alle niveauer.', 1],
     ['it',      'IT & Data',               '#3A6FF8', '#0D1A38', 'Excel, Power BI, Python og alt det digitale. Fra begynder til ekspert.', 2],
@@ -137,12 +273,12 @@ function seed() {
     ['amu',     'AMU / Erhvervsfaglig',     '#C7553A', '#2E1208', 'Statsfinansierede AMU-kurser — gratis for berettigede deltagere.', 5],
     ['salg',    'Salg & Kundeservice',      '#C9A227', '#2E1A0A', 'Sælg bedre, betjen kunder professionelt og byg stærke relationer.', 6],
   ];
-  cats.forEach(c => insertCat.run(...c));
+  for (const c of cats) await x.run(insertCatSql, ...c);
 
-  const insertSupplier = db.prepare(`
+  const insertSupplierSql = `
     INSERT INTO suppliers (name, abbr, email, phone, website, description, rating, review_count)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  `;
   const suppliers = [
     ['Competence Way',          'CW',  'kurser@cw.dk',             '77 300 123', 'https://competenceway.dk',          'Ledende udbyder af ledelse- og kommunikationskurser i Danmark.',    4.8, 312],
     ['Waltersdorff Consulting', 'WC',  'therese@waltersdorff.dk',  '70 270 270', 'https://waltersdorff.dk',           'Præsentationsteknik, motivation og personlig branding.',            4.9, 287],
@@ -154,17 +290,10 @@ function seed() {
     ['TechErhverv',             'TE',  'amu@techerhverv.dk',        '76 100 200', 'https://techerhverv.dk',            'AMU-kurser og erhvervsfaglige uddannelser for industrien.',         4.7, 359],
     ['ServiceAkademiet',        'SA',  'info@serviceakademiet.dk',  '70 888 999', 'https://serviceakademiet.dk',       'Kundeservice, salg og kommunikation for frontline medarbejdere.',  4.6, 278],
   ];
-  suppliers.forEach(s => insertSupplier.run(...s));
+  for (const s of suppliers) await x.run(insertSupplierSql, ...s);
 
-  const getCatId = key => db.prepare('SELECT id FROM categories WHERE key=?').get(key).id;
-  const getSupId = name => db.prepare('SELECT id FROM suppliers WHERE name=?').get(name).id;
-
-  const insertCourse = db.prepare(`
-    INSERT INTO courses (title, slug, supplier_id, category_id, price, format, duration, is_online,
-      rating, review_count, color, badge, preset_type, status,
-      outcomes, included, facts, marquee_items)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
-  `);
+  const getCatId = async key => (await x.get('SELECT id FROM categories WHERE key=?', key)).id;
+  const getSupId = async name => (await x.get('SELECT id FROM suppliers WHERE name=?', name)).id;
 
   const courses = [
     {
@@ -321,25 +450,25 @@ function seed() {
     },
   ];
 
-  const insertCourse2 = db.prepare(`
+  const insertCourseSql = `
     INSERT INTO courses (title, slug, supplier_id, category_id, price, format, duration, is_online,
       rating, review_count, color, badge, preset_type, status, outcomes, included, facts, marquee_items)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
-  `);
+  `;
 
-  courses.forEach(c => {
-    const supId = getSupId(c.supplier);
-    const catId = getCatId(c.cat);
-    insertCourse2.run(c.title, c.slug, supId, catId, c.price, c.format, c.dur, c.online,
+  for (const c of courses) {
+    const supId = await getSupId(c.supplier);
+    const catId = await getCatId(c.cat);
+    await x.run(insertCourseSql, c.title, c.slug, supId, catId, c.price, c.format, c.dur, c.online,
       c.rating, c.reviews, c.color, c.badge, c.preset, c.outcomes, c.included, c.facts, c.marquee);
-  });
+  }
 
-  // Seed sessions for Forhandlingsteknik (course id=1)
-  const insertSession = db.prepare(`
+  // Seed sessions for Forhandlingsteknik (the hand-tuned spread)
+  const insertSessionSql = `
     INSERT INTO sessions (course_id, date, location, venue, format, is_online, seats, is_popular)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const course1Id = db.prepare('SELECT id FROM courses WHERE slug=?').get('forhandlingsteknik').id;
+  `;
+  const course1Id = (await x.get('SELECT id FROM courses WHERE slug=?', 'forhandlingsteknik')).id;
   const sessionData = [
     [course1Id, '2026-06-12', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 8, 0],
     [course1Id, '2026-09-03', 'København', 'Tivoli Congress Center', 'Fysisk · 1 dag', 0, 11, 1],
@@ -351,30 +480,29 @@ function seed() {
     [course1Id, '2026-07-11', 'Online',    'Live via Zoom',           'Online · 1 dag', 1, 30, 1],
     [course1Id, '2026-08-29', 'Online',    'Live via Zoom',           'Online · 1 dag', 1, 18, 0],
   ];
-  sessionData.forEach(s => insertSession.run(...s));
+  for (const s of sessionData) await x.run(insertSessionSql, ...s);
 
   // Sample bookings
-  const insertBooking = db.prepare(`
+  const insertBookingSql = `
     INSERT INTO bookings (session_id, customer_name, customer_email, customer_company, participants, payment_method, status)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  const sess1Id = db.prepare('SELECT id FROM sessions WHERE course_id=? AND date=?').get(course1Id, '2026-06-12').id;
-  [
+  `;
+  const sess1Id = (await x.get('SELECT id FROM sessions WHERE course_id=? AND date=?', course1Id, '2026-06-12')).id;
+  const sampleBookings = [
     [sess1Id, 'Mette Kjær',     'mette@nordiskhandel.dk', 'Nordisk Handel',  1, 'faktura',   'confirmed'],
     [sess1Id, 'Lars Pedersen',  'lars@byggefirma.dk',     'Byg & Anlæg A/S', 2, 'ean',       'confirmed'],
     [sess1Id, 'Anne-Sophie L.', 'anne@startup.io',        'TechStartup',     1, 'kort',      'pending'],
     [sess1Id, 'Thomas Bro',     'thomas@consulting.dk',   'Nordic Consult',  1, 'mobilepay', 'pending'],
-  ].forEach(b => insertBooking.run(...b));
+  ];
+  for (const b of sampleBookings) await x.run(insertBookingSql, ...b);
 }
-
-seed();
 
 /* ============ SESSION BACKFILL ============
    Idempotent: gives every active course a realistic spread of upcoming
    sessions. Only inserts for courses that currently have none, so it is
    safe to run on every boot and never duplicates or touches existing data
    (incl. the hand-tuned Forhandlingsteknik sessions and sample bookings). */
-function backfillSessions() {
+async function backfillSessions(x) {
   const VENUES = {
     'København': 'Tivoli Congress Center',
     'Aarhus':    'Comwell Aarhus',
@@ -390,17 +518,17 @@ function backfillSessions() {
     return d.toISOString().slice(0, 10); // YYYY-MM-DD
   }
 
-  const insertSession = db.prepare(`
+  const insertSessionSql = `
     INSERT INTO sessions (course_id, date, location, venue, format, is_online, seats, is_popular)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  `;
 
-  const courses = db.prepare("SELECT id, duration, format, is_online FROM courses WHERE status='active'").all();
+  const courses = await x.all("SELECT id, duration, format, is_online FROM courses WHERE status='active'");
 
-  const insertMany = db.transaction(() => {
-    courses.forEach(course => {
-      const existing = db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE course_id=?').get(course.id).n;
-      if (existing > 0) return; // never clobber courses that already have dates
+  await x.transaction(async (tx) => {
+    for (const course of courses) {
+      const existing = (await tx.get('SELECT COUNT(*) AS n FROM sessions WHERE course_id=?', course.id)).n;
+      if (existing > 0) continue; // never clobber courses that already have dates
 
       const dur     = course.duration || '1 dag';
       const shift   = (course.id * 5) % 21;           // spread courses apart so dates differ
@@ -432,17 +560,35 @@ function backfillSessions() {
         }
       }
 
-      plan.forEach((p, i) => {
-        const [location, date, format, isOnline, popular] = p;
+      for (let i = 0; i < plan.length; i++) {
+        const [location, date, format, isOnline, popular] = plan[i];
         const seats = seatPool[(course.id + i) % seatPool.length];
-        insertSession.run(course.id, date, location, VENUES[location] || location, format, isOnline, seats, popular);
-      });
-    });
+        await tx.run(insertSessionSql, course.id, date, location, VENUES[location] || location, format, isOnline, seats, popular);
+      }
+    }
   });
-
-  insertMany();
 }
 
-backfillSessions();
+/* ============ PUBLIC LAYER ============ */
+const driver = process.env.DATABASE_URL ? pgDriver() : sqliteDriver();
 
-module.exports = db;
+const ready = (async () => {
+  await driver.exec(schemaSql(driver.name === 'pg'));
+  await seed(driver);
+  await backfillSessions(driver);
+})();
+// Failures surface via the gated helpers and the server-boot await; this
+// branch handler just prevents an unhandled-rejection crash in between.
+ready.catch(() => {});
+
+module.exports = {
+  driver: driver.name,
+  ready,
+  all: async (sql, ...params) => { await ready; return driver.all(sql, ...params); },
+  get: async (sql, ...params) => { await ready; return driver.get(sql, ...params); },
+  run: async (sql, ...params) => { await ready; return driver.run(sql, ...params); },
+  transaction: async (fn) => { await ready; return driver.transaction(fn); },
+  close: () => driver.close(),
+  // exposed for the db-layer tests
+  _internal: { resolveSqlitePath, maybeSeedFromLegacy, LEGACY_SQLITE_PATH },
+};

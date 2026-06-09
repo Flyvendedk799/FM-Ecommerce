@@ -36,6 +36,7 @@
 
   /* ============ STATE ============ */
   let activeCat = null;
+  let activeQuery = null;   // non-null when in search-results mode
   let activeFormat = 'alle';
   let activeDur = 'alle';
   let activeSort = 'relevans';
@@ -74,9 +75,9 @@
   }
 
   function formatChip(c) {
-    var chips = ['<span class="cc-meta-chip">' + c.dur + '</span>'];
+    var chips = ['<span class="cc-meta-chip">' + escAttr(c.dur) + '</span>'];
     if (c.online && c.format === 'Fysisk') chips.push('<span class="cc-meta-chip">+ Online</span>');
-    else chips.push('<span class="cc-meta-chip">' + c.format + '</span>');
+    else chips.push('<span class="cc-meta-chip">' + escAttr(c.format) + '</span>');
     return chips.join('');
   }
 
@@ -87,17 +88,19 @@
   }
 
   function courseCard(c) {
-    return '<a class="cc-card reveal" href="' + c.url + '">' +
-      '<div class="cc-top" style="background:' + c.color + '">' +
+    var cat = CATS[c.cat];
+    var catLabel = cat ? cat.label.split(' ')[0] : (c.category_label || 'Kursus');
+    return '<a class="cc-card reveal" href="' + escAttr(c.url) + '">' +
+      '<div class="cc-top" style="background:' + safeColor(c.color) + '">' +
         '<div class="cc-cat-row">' +
-          '<span class="cc-cat">' + CATS[c.cat].label.split(' ')[0] + '</span>' +
+          '<span class="cc-cat">' + escAttr(catLabel) + '</span>' +
           '<span class="cc-rating"><span class="cc-star">★</span>' + c.rating + '</span>' +
         '</div>' +
         '<div class="cc-badges">' + badgeHTML(c) + '</div>' +
       '</div>' +
       '<div class="cc-body">' +
-        '<h3 class="cc-title">' + c.title + '</h3>' +
-        '<div class="cc-supplier">' + c.supplier + ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.</div>' +
+        '<h3 class="cc-title">' + escAttr(c.title) + '</h3>' +
+        '<div class="cc-supplier">' + escAttr(c.supplier) + ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.</div>' +
         '<div class="cc-meta">' + formatChip(c) + '</div>' +
         '<div class="cc-foot">' + priceHTML(c) + '<span class="cc-cta">Se kursus →</span></div>' +
       '</div>' +
@@ -118,14 +121,14 @@
         salg:'<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'
       };
       var d = 'reveal-d' + (i % 5);
-      return '<a class="kat-card reveal ' + d + '" href="#' + k + '" data-cat="' + k + '">' +
-        '<div class="kat-card-accent" style="background:' + cat.accent + '"></div>' +
+      return '<a class="kat-card reveal ' + d + '" href="#' + escAttr(k) + '" data-cat="' + escAttr(k) + '">' +
+        '<div class="kat-card-accent" style="background:' + safeColor(cat.accent) + '"></div>' +
         '<div class="kat-card-top">' +
           '<div class="kat-badge"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + (icons[k]||'') + '</svg></div>' +
           '<div class="kat-card-num">0' + (catKeys.indexOf(k)+1) + '</div>' +
         '</div>' +
-        '<h3>' + cat.label + '</h3>' +
-        '<div class="kc-desc">' + cat.desc + '</div>' +
+        '<h3>' + escAttr(cat.label) + '</h3>' +
+        '<div class="kc-desc">' + escAttr(cat.desc) + '</div>' +
         '<div class="kc-foot">' +
           '<div class="kc-count">' + cat.count + ' kurser</div>' +
           '<div class="kc-arrow">→</div>' +
@@ -160,25 +163,20 @@
       });
     });
 
-    // search input
-    var si = document.getElementById('kat-search-input');
-    if (si) si.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' && si.value.trim()) {
-        // find best matching category
-        var q = si.value.toLowerCase();
-        var match = Object.keys(CATS).find(function(k) {
-          return CATS[k].label.toLowerCase().includes(q);
-        });
-        if (match) window.location.hash = match;
-        else window.location.hash = 'ledelse'; // fallback
-      }
-    });
+    // search — real cross-catalog search results
+    var si  = document.getElementById('kat-search-input');
+    var sbt = view.querySelector('.kat-search button');
+    function runSearch() {
+      var val = si && si.value.trim();
+      if (val) window.location.hash = 'q=' + encodeURIComponent(val);
+    }
+    if (si)  si.addEventListener('keydown', function(e){ if (e.key === 'Enter') runSearch(); });
+    if (sbt) sbt.addEventListener('click', runSearch);
   }
 
-  /* ============ CATEGORY VIEW ============ */
-  function getFiltered(catKey) {
-    return COURSES.filter(function(c) {
-      if (c.cat !== catKey) return false;
+  /* ============ FILTERING (shared by category + search views) ============ */
+  function applyFilters(list) {
+    return list.filter(function(c) {
       if (activeFormat === 'online' && !c.online) return false;
       if (activeFormat === 'fysisk' && c.online && c.format === 'Online') return false;
       if (activeDur === '1dag' && c.dur !== '1 dag') return false;
@@ -192,27 +190,62 @@
     });
   }
 
-  function renderCourseGrid(catKey) {
-    var courses = getFiltered(catKey);
+  function courseMatches(c, q) {
+    var hay = [
+      c.title || '',
+      c.supplier || '',
+      (CATS[c.cat] ? CATS[c.cat].label : ''),
+      c.format || '',
+      c.dur || ''
+    ].join(' ').toLowerCase();
+    // every whitespace-separated term must be present (AND search)
+    return q.toLowerCase().split(/\s+/).filter(Boolean).every(function(term){
+      return hay.indexOf(term) >= 0;
+    });
+  }
+
+  // Result set for the current view — category mode or search mode.
+  function getResults() {
+    var base = (activeQuery != null)
+      ? COURSES.filter(function(c){ return courseMatches(c, activeQuery); })
+      : COURSES.filter(function(c){ return c.cat === activeCat; });
+    return applyFilters(base);
+  }
+
+  function renderCourseGrid() {
+    var courses = getResults();
     var grid = document.getElementById('course-grid-inner');
     if (!grid) return;
     if (courses.length === 0) {
-      grid.innerHTML = '<div class="no-courses"><h3>Ingen kurser matcher filteret</h3><p>Prøv at fjerne et filter.</p></div>';
+      grid.innerHTML = activeQuery != null
+        ? '<div class="no-courses"><h3>Ingen kurser matcher “' + escAttr(activeQuery) + '”</h3><p>Prøv et andet søgeord eller udforsk kategorierne.</p></div>'
+        : '<div class="no-courses"><h3>Ingen kurser matcher filteret</h3><p>Prøv at fjerne et filter.</p></div>';
       return;
     }
     grid.innerHTML = courses.map(courseCard).join('');
     initReveals();
   }
 
+  function escAttr(s) {
+    return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Validate a value as a hex CSS color before interpolating into style="" —
+  // fall back to the default ink color if it isn't a clean hex value.
+  function safeColor(v) {
+    return /^#[0-9a-fA-F]{3,8}$/.test(String(v || '')) ? v : '#2C1A0A';
+  }
+
   function renderCategory(catKey) {
     var cat = CATS[catKey];
     if (!cat) { renderOverview(); return; }
     activeCat = catKey;
+    activeQuery = null;
 
     // sidebar nav items
     var sidebarItems = Object.keys(CATS).map(function(k) {
-      return '<button class="sidebar-cat' + (k===catKey?' active':'') + '" data-cat="' + k + '" style="' + (k===catKey?'background:var(--ink);color:var(--paper);':'') + '">' +
-        '<span class="sidebar-dot" style="background:' + CATS[k].accent + '"></span>' + CATS[k].label +
+      return '<button class="sidebar-cat' + (k===catKey?' active':'') + '" data-cat="' + escAttr(k) + '" style="' + (k===catKey?'background:var(--ink);color:var(--paper);':'') + '">' +
+        '<span class="sidebar-dot" style="background:' + safeColor(CATS[k].accent) + '"></span>' + escAttr(CATS[k].label) +
       '</button>';
     }).join('');
 
@@ -222,11 +255,11 @@
           '<div class="cat-breadcrumb">' +
             '<a href="#" id="back-link">Alle kurser</a>' +
             '<span class="sep">›</span>' +
-            '<span style="color:rgba(237,230,214,.8)">' + cat.label + '</span>' +
+            '<span style="color:rgba(237,230,214,.8)">' + escAttr(cat.label) + '</span>' +
           '</div>' +
-          '<span class="cat-accent-chip" style="background:' + cat.accent + ';color:' + (cat.accent==='#C9A227'?'#1A1200':'#fff') + ';margin-bottom:16px">' + cat.label + '</span>' +
-          '<h1 class="cat-view-title">' + cat.label + '</h1>' +
-          '<p class="cat-view-desc">' + cat.desc + '</p>' +
+          '<span class="cat-accent-chip" style="background:' + safeColor(cat.accent) + ';color:' + (cat.accent==='#C9A227'?'#1A1200':'#fff') + ';margin-bottom:16px">' + escAttr(cat.label) + '</span>' +
+          '<h1 class="cat-view-title">' + escAttr(cat.label) + '</h1>' +
+          '<p class="cat-view-desc">' + escAttr(cat.desc) + '</p>' +
           '<div class="cat-view-meta"><span class="cat-view-count">' + cat.count + ' kurser tilgængelige</span></div>' +
         '</div>' +
       '</section>' +
@@ -266,7 +299,7 @@
         '</div>' +
       '</div>';
 
-    renderCourseGrid(catKey);
+    renderCourseGrid();
 
     // back link
     var back = document.getElementById('back-link');
@@ -281,7 +314,7 @@
         if (filter === 'dur') activeDur = val;
         view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
-        renderCourseGrid(catKey);
+        renderCourseGrid();
       });
     });
 
@@ -289,7 +322,7 @@
     var sortSel = document.getElementById('sort-sel');
     if (sortSel) sortSel.addEventListener('change', function() {
       activeSort = sortSel.value;
-      renderCourseGrid(catKey);
+      renderCourseGrid();
     });
 
     // sidebar nav
@@ -311,10 +344,128 @@
     });
   }
 
+  /* ============ SEARCH RESULTS VIEW ============ */
+  function renderSearch(q) {
+    activeCat = null;
+    activeQuery = q;
+
+    var matchCount = COURSES.filter(function(c){ return courseMatches(c, q); }).length;
+
+    // sidebar lets users jump into a category to refine
+    var sidebarItems = Object.keys(CATS).map(function(k) {
+      return '<button class="sidebar-cat" data-cat="' + escAttr(k) + '">' +
+        '<span class="sidebar-dot" style="background:' + safeColor(CATS[k].accent) + '"></span>' + escAttr(CATS[k].label) +
+      '</button>';
+    }).join('');
+
+    view.innerHTML =
+      '<section class="cat-view-header">' +
+        '<div class="wrap">' +
+          '<div class="cat-breadcrumb">' +
+            '<a href="#" id="back-link">Alle kurser</a>' +
+            '<span class="sep">›</span>' +
+            '<span style="color:rgba(237,230,214,.8)">Søgning</span>' +
+          '</div>' +
+          '<h1 class="cat-view-title">“' + escAttr(q) + '”</h1>' +
+          '<p class="cat-view-desc">' + matchCount + ' ' + (matchCount === 1 ? 'kursus' : 'kurser') + ' matcher din søgning.</p>' +
+          '<div class="kat-search" style="margin-top:20px;max-width:540px">' +
+            '<input type="text" id="kat-search-input" value="' + escAttr(q) + '" placeholder="Søg blandt kurser..." aria-label="Søg">' +
+            '<button type="button" id="kat-search-btn">Søg</button>' +
+          '</div>' +
+        '</div>' +
+      '</section>' +
+
+      '<div class="filter-bar" id="filter-bar">' +
+        '<div class="filter-inner">' +
+          '<span class="filter-label">Format</span>' +
+          '<div class="filter-group">' +
+            '<button class="f-chip' + (activeFormat==='alle'?' active':'') + '" data-filter="format" data-val="alle">Alle</button>' +
+            '<button class="f-chip' + (activeFormat==='fysisk'?' active':'') + '" data-filter="format" data-val="fysisk">Fysisk</button>' +
+            '<button class="f-chip' + (activeFormat==='online'?' active':'') + '" data-filter="format" data-val="online">Online</button>' +
+          '</div>' +
+          '<div class="filter-sep"></div>' +
+          '<span class="filter-label">Varighed</span>' +
+          '<div class="filter-group">' +
+            '<button class="f-chip' + (activeDur==='alle'?' active':'') + '" data-filter="dur" data-val="alle">Alle</button>' +
+            '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
+            '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
+          '</div>' +
+          '<div class="filter-sort">' +
+            'Sorter: <select id="sort-sel">' +
+              '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
+              '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Rating</option>' +
+              '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
+              '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="wrap">' +
+        '<div class="cat-layout">' +
+          '<nav class="cat-sidebar">' + sidebarItems + '</nav>' +
+          '<div>' +
+            '<div class="course-grid view-fade-in" id="course-grid-inner"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    renderCourseGrid();
+
+    // back to overview
+    var back = document.getElementById('back-link');
+    if (back) back.addEventListener('click', function(e) { e.preventDefault(); window.location.hash = ''; });
+
+    // refine search
+    function submitSearch() {
+      var si = document.getElementById('kat-search-input');
+      var val = si && si.value.trim();
+      if (val) window.location.hash = 'q=' + encodeURIComponent(val);
+    }
+    var sbtn = document.getElementById('kat-search-btn');
+    if (sbtn) sbtn.addEventListener('click', submitSearch);
+    var sinput = document.getElementById('kat-search-input');
+    if (sinput) sinput.addEventListener('keydown', function(e){ if (e.key === 'Enter') submitSearch(); });
+
+    // filter chips
+    view.querySelectorAll('.f-chip').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var filter = btn.getAttribute('data-filter');
+        var val = btn.getAttribute('data-val');
+        if (filter === 'format') activeFormat = val;
+        if (filter === 'dur') activeDur = val;
+        view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        renderCourseGrid();
+      });
+    });
+
+    // sort
+    var sortSel = document.getElementById('sort-sel');
+    if (sortSel) sortSel.addEventListener('change', function() {
+      activeSort = sortSel.value;
+      renderCourseGrid();
+    });
+
+    // sidebar → jump into a category
+    view.querySelectorAll('.sidebar-cat').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        window.location.hash = btn.getAttribute('data-cat');
+      });
+    });
+  }
+
   /* ============ ROUTING ============ */
   function route() {
     var hash = window.location.hash.slice(1);
     activeFormat = 'alle'; activeDur = 'alle'; activeSort = 'relevans';
+    if (hash.indexOf('q=') === 0) {
+      var q = decodeURIComponent(hash.slice(2));
+      if (q.trim()) renderSearch(q.trim());
+      else renderOverview();
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
     if (hash && CATS[hash]) renderCategory(hash);
     else renderOverview();
     window.scrollTo({ top: 0, behavior: 'auto' });

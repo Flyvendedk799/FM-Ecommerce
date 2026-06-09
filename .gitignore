@@ -4,3 +4,7 @@ backend/futurematch.db-wal
 *.db-shm
 *.db-wal
 .DS_Store
+
+# Local SQLite database (regenerated on boot)
+backend/futurematch.db
+*.db

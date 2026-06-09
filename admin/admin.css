@@ -3,6 +3,8 @@
    ============================================================ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* [hidden] must always win over author display:flex/grid (overlays, modals) */
+[hidden] { display: none !important; }
 
 :root {
   --ink:         #17150E;
@@ -507,6 +509,8 @@ tbody td {
   backdrop-filter: blur(3px);
   animation: fadeIn .2s ease;
 }
+/* the display:grid above overrides the UA [hidden]{display:none}; restore it */
+.modal-overlay[hidden] { display: none; }
 @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
 
 .modal {
@@ -986,6 +990,13 @@ tbody td {
 }
 .seats-low { color: var(--red); }
 .seats-ok  { color: var(--green); }
+
+/* booking → session filter banner */
+.session-filter-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--paper-2, #efe7d8); border: 1px solid var(--border, #e2dccb);
+  border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px;
+}
 
 /* ============ TOASTS ============ */
 .toast-container {

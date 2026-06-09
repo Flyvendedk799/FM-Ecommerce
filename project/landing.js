@@ -168,4 +168,53 @@
     });
   });
 
+  /* ---- live featured courses (top-rated from the catalog) ---- */
+  (function loadFeatured() {
+    const grid = document.querySelector('.featured-grid');
+    if (!grid) return;
+    const esc = s => String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const safeColor = v => /^#[0-9a-fA-F]{3,8}$/.test(String(v || '')) ? v : '#2C1A0A';
+
+    fetch('/api/courses?status=active')
+      .then(r => r.ok ? r.json() : null)
+      .then(courses => {
+        if (!courses || !courses.length) return; // keep static fallback cards
+        const featured = courses.slice()
+          .sort((a, b) => (b.rating - a.rating) || ((b.review_count || 0) - (a.review_count || 0)))
+          .slice(0, 4);
+
+        grid.innerHTML = featured.map((c, i) => {
+          const shortCat = (c.category_label || '').split(' ')[0] || 'Kursus';
+          const rating = c.rating ? (+c.rating).toFixed(1).replace('.', ',') : '—';
+          const price = c.price
+            ? 'kr. ' + (+c.price).toLocaleString('da-DK') + '<small> ekskl. moms</small>'
+            : '<span style="color:var(--accent)">Gratis*</span>';
+          const d = i ? ' reveal-d' + i : '';
+          return '<a class="rc-card reveal' + d + '" href="kursus.html?id=' + (+c.id) + '">' +
+            '<div class="rc-top" style="background:' + safeColor(c.color) + '">' +
+              '<span class="rc-cat">' + esc(shortCat) + '</span>' +
+              '<span class="rc-rating"><span class="rc-star">★</span>' + rating + '</span>' +
+              '<span class="rc-go">→</span>' +
+            '</div>' +
+            '<div class="rc-body">' +
+              '<h3 class="rc-title">' + esc(c.title) + '</h3>' +
+              '<div class="rc-supplier">' + esc(c.supplier_name || '') + '</div>' +
+              '<div class="rc-foot">' +
+                '<span class="rc-dur">' + esc(c.duration || '') + '</span>' +
+                '<span class="rc-price">' + price + '</span>' +
+              '</div>' +
+            '</div>' +
+          '</a>';
+        }).join('');
+
+        // reveal the freshly-injected cards (the global observer captured the old list)
+        grid.querySelectorAll('.reveal').forEach((r, i) => {
+          if (reduce) { r.classList.add('is-in'); return; }
+          setTimeout(() => r.classList.add('is-in'), 60 + i * 70);
+        });
+      })
+      .catch(() => { /* offline / API down — static cards remain */ });
+  })();
+
 })();

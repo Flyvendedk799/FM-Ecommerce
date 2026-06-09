@@ -1,6 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const requireAdmin = require('../middleware/requireAdmin');
+const { getStats } = require('../stats');
+const { httpError, statusOrDefault, statusStrict, intInRange, isISODate, todayISO } = require('../validate');
+
+/* ---- auth: only the public create (POST '/') is open; the rest is admin (PII) ---- */
+router.use((req, res, next) =>
+  (req.method === 'POST' && req.path === '/') ? next() : requireAdmin(req, res, next));
+
+// Seats already booked on a session (excludes cancelled and, optionally, one booking).
+function bookedSeats(sessionId, excludeBookingId) {
+  return db.prepare(
+    `SELECT COALESCE(SUM(participants), 0) AS n FROM bookings
+     WHERE session_id = ? AND status != 'cancelled' AND id != ?`
+  ).get(sessionId, excludeBookingId == null ? -1 : excludeBookingId).n;
+}
 
 router.get('/', (req, res) => {
   const { status, session_id } = req.query;
@@ -18,6 +33,9 @@ router.get('/', (req, res) => {
   res.json(db.prepare(sql).all(...params));
 });
 
+/* ---- stats summary (admin) — defined before '/:id' is irrelevant since it's 2 segments ---- */
+router.get('/stats/summary', (req, res) => res.json(getStats()));
+
 router.get('/:id', (req, res) => {
   const row = db.prepare(`
     SELECT b.*, sess.date, sess.location, sess.venue, c.title as course_title
@@ -31,32 +49,61 @@ router.get('/:id', (req, res) => {
 });
 
 router.post('/', (req, res) => {
-  const { session_id, customer_name, customer_email, customer_company = '',
-          customer_phone = '', participants = 1, payment_method = 'faktura',
-          notes = '', status = 'pending' } = req.body;
+  const { session_id = null, customer_name, customer_email, customer_company = '',
+          customer_phone = '', notes = '' } = req.body;
   if (!customer_name || !customer_email) {
-    return res.status(400).json({ error: 'customer_name and customer_email required' });
+    throw httpError(400, 'customer_name and customer_email required');
   }
-  const result = db.prepare(`
-    INSERT INTO bookings (session_id, customer_name, customer_email, customer_company,
-      customer_phone, participants, payment_method, notes, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(session_id || null, customer_name, customer_email, customer_company,
-    customer_phone, participants, payment_method, notes, status);
+  const participants   = intInRange(req.body.participants, { min: 1, max: 999, field: 'Antal deltagere', def: 1 });
+  const payment_method = req.body.payment_method || 'faktura';
+  const status         = statusOrDefault(req.body.status, 'booking', 'pending');
+
+  // Capacity-checked insert in one transaction (no overbooking, even concurrently).
+  const create = db.transaction(() => {
+    if (session_id != null) {
+      const sess = db.prepare('SELECT id, seats, status, date FROM sessions WHERE id=?').get(session_id);
+      if (!sess) throw httpError(404, 'Holdet findes ikke');
+      if (sess.status !== 'active') throw httpError(409, 'Holdet er ikke længere åbent for tilmelding');
+      if (isISODate(sess.date) && sess.date < todayISO()) throw httpError(409, 'Holdet er allerede afholdt');
+      if (bookedSeats(session_id, null) + participants > sess.seats) {
+        throw httpError(409, 'Holdet er fuldt — der er ikke plads nok');
+      }
+    }
+    return db.prepare(`
+      INSERT INTO bookings (session_id, customer_name, customer_email, customer_company,
+        customer_phone, participants, payment_method, notes, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(session_id, customer_name, customer_email, customer_company,
+      customer_phone, participants, payment_method, notes, status);
+  });
+
+  const result = create();
   res.status(201).json({ id: result.lastInsertRowid });
 });
 
 router.put('/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM bookings WHERE id=?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
-  const { status, notes, participants, payment_method } = req.body;
-  db.prepare(`
-    UPDATE bookings SET status=?, notes=?, participants=?, payment_method=? WHERE id=?
-  `).run(
-    status ?? existing.status, notes ?? existing.notes,
-    participants ?? existing.participants, payment_method ?? existing.payment_method,
-    req.params.id
-  );
+
+  const status       = statusStrict(req.body.status, 'booking', existing.status);
+  const notes        = req.body.notes ?? existing.notes;
+  const payment      = req.body.payment_method ?? existing.payment_method;
+  const participants = req.body.participants !== undefined
+    ? intInRange(req.body.participants, { min: 1, max: 999, field: 'Antal deltagere' })
+    : existing.participants;
+
+  const update = db.transaction(() => {
+    // Re-check capacity if still an active booking on a session and the count went up.
+    if (existing.session_id != null && status !== 'cancelled') {
+      const sess = db.prepare('SELECT seats FROM sessions WHERE id=?').get(existing.session_id);
+      if (sess && bookedSeats(existing.session_id, existing.id) + participants > sess.seats) {
+        throw httpError(409, 'Holdet er fuldt — kan ikke øge antal deltagere');
+      }
+    }
+    db.prepare('UPDATE bookings SET status=?, notes=?, participants=?, payment_method=? WHERE id=?')
+      .run(status, notes, participants, payment, req.params.id);
+  });
+  update();
   res.json({ ok: true });
 });
 
@@ -64,34 +111,6 @@ router.delete('/:id', (req, res) => {
   const result = db.prepare('DELETE FROM bookings WHERE id=?').run(req.params.id);
   if (result.changes === 0) return res.status(404).json({ error: 'Not found' });
   res.json({ ok: true });
-});
-
-/* ---- stats endpoint ---- */
-router.get('/stats/summary', (req, res) => {
-  const stats = {
-    total_courses:     db.prepare("SELECT COUNT(*) as n FROM courses WHERE status='active'").get().n,
-    draft_courses:     db.prepare("SELECT COUNT(*) as n FROM courses WHERE status='draft'").get().n,
-    total_suppliers:   db.prepare("SELECT COUNT(*) as n FROM suppliers WHERE status='active'").get().n,
-    total_sessions:    db.prepare("SELECT COUNT(*) as n FROM sessions WHERE status='active'").get().n,
-    pending_bookings:  db.prepare("SELECT COUNT(*) as n FROM bookings WHERE status='pending'").get().n,
-    confirmed_bookings:db.prepare("SELECT COUNT(*) as n FROM bookings WHERE status='confirmed'").get().n,
-    total_bookings:    db.prepare("SELECT COUNT(*) as n FROM bookings").get().n,
-    recent_courses:    db.prepare(`
-      SELECT c.title, c.status, c.price, c.rating, s.name as supplier_name, cat.label as category_label
-      FROM courses c
-      LEFT JOIN suppliers s ON s.id = c.supplier_id
-      LEFT JOIN categories cat ON cat.id = c.category_id
-      ORDER BY c.created_at DESC LIMIT 5
-    `).all(),
-    recent_bookings: db.prepare(`
-      SELECT b.*, c.title as course_title, sess.date, sess.location
-      FROM bookings b
-      LEFT JOIN sessions sess ON sess.id = b.session_id
-      LEFT JOIN courses c ON c.id = sess.course_id
-      ORDER BY b.created_at DESC LIMIT 5
-    `).all(),
-  };
-  res.json(stats);
 });
 
 module.exports = router;

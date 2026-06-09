@@ -8,13 +8,28 @@
   const API = '/api';
   const content = document.getElementById('content');
 
+  /* ============ ADMIN TOKEN ============ */
+  let adminToken = localStorage.getItem('fm_admin_token') || '';
+  function setToken(t) { adminToken = t || ''; localStorage.setItem('fm_admin_token', adminToken); }
+  function clearToken() { adminToken = ''; localStorage.removeItem('fm_admin_token'); }
+
   /* ============ API WRAPPER ============ */
   async function api(path, opts = {}) {
+    const { headers: optHeaders, ...rest } = opts;
     const res = await fetch(API + path, {
-      headers: { 'Content-Type': 'application/json' },
-      ...opts,
+      ...rest,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(adminToken ? { Authorization: 'Bearer ' + adminToken } : {}),
+        ...(optHeaders || {}),
+      },
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
+    if (res.status === 401) {
+      clearToken();
+      showLogin('Forkert eller udløbet adgangstoken. Prøv igen.');
+      throw new Error('Unauthorized');
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || res.statusText);
@@ -114,12 +129,12 @@
     const map = {
       active: 'active', draft: 'draft', archived: 'archived',
       pending: 'pending', confirmed: 'confirmed', cancelled: 'cancelled',
-      inactive: 'inactive',
+      inactive: 'inactive', full: 'pending',
     };
     const labels = {
       active:'Aktiv', draft:'Kladde', archived:'Arkiveret',
       pending:'Afventer', confirmed:'Bekræftet', cancelled:'Annulleret',
-      inactive:'Inaktiv',
+      inactive:'Inaktiv', full:'Udsolgt',
     };
     const cls = map[status] || 'draft';
     return `<span class="badge badge-${cls}"><span class="badge-dot"></span>${labels[status] || status}</span>`;
@@ -348,6 +363,8 @@
     if (stats.pending_bookings > 0) {
       document.getElementById('badge-bookings').textContent = stats.pending_bookings;
     }
+    const inqBadge = document.getElementById('badge-inquiries');
+    if (inqBadge) inqBadge.textContent = stats.new_inquiries > 0 ? stats.new_inquiries : '';
   }
 
   /* ============================================================
@@ -1064,8 +1081,13 @@
                 const d = new Date(s.date);
                 const day = d.getDate();
                 const mon = DA_MONTHS[d.getMonth()];
-                const seatsClass = s.seats <= 4 ? 'seats-low' : 'seats-ok';
-                const seatsTxt = s.seats <= 4 ? `Kun ${s.seats} pladser` : `${s.seats} pladser`;
+                const cap = s.seats;
+                const remaining = (s.seats_remaining != null) ? s.seats_remaining : s.seats;
+                const booked = Math.max(0, cap - remaining);
+                const isFull = remaining <= 0;
+                const isLow = !isFull && remaining <= 4;
+                const seatsClass = (isFull || isLow) ? 'seats-low' : 'seats-ok';
+                const seatsTxt = isFull ? 'Udsolgt' : `${remaining} tilbage`;
                 return `<div class="session-item" data-id="${s.id}">
                   <div class="session-date-badge">
                     <div class="sdb-d">${day}</div>
@@ -1073,11 +1095,12 @@
                   </div>
                   <div class="session-info">
                     <div class="session-venue">${escHtml(s.venue||s.location)}</div>
-                    <div class="session-meta">${escHtml(s.location)} · ${escHtml(s.format)}</div>
+                    <div class="session-meta">${escHtml(s.location)} · ${escHtml(s.format)} · <b>${booked}/${cap}</b> booket</div>
                   </div>
                   <div class="session-badges">
                     ${s.is_popular ? '<span class="badge badge-active" style="gap:4px">★ Populært</span>' : ''}
-                    <span class="seats-indicator ${seatsClass}">${seatsTxt}</span>
+                    <span class="seats-indicator ${seatsClass}" title="${booked} booket af ${cap} pladser">${seatsTxt}</span>
+                    <button class="btn btn-sm btn-ghost btn-session-bookings" data-id="${s.id}" title="Se bookinger for dette hold">${booked} booket</button>
                     ${statusBadge(s.status)}
                   </div>
                   <div class="session-actions">
@@ -1103,6 +1126,14 @@
 
     document.querySelectorAll('.btn-edit-session').forEach(btn => {
       btn.addEventListener('click', () => openSessionForm(btn.dataset.id, selId));
+    });
+
+    document.querySelectorAll('.btn-session-bookings').forEach(btn => {
+      btn.addEventListener('click', () => {
+        bookingSessionFilter = btn.dataset.id;
+        bookingFilter = 'alle';
+        window.location.hash = 'bookings';
+      });
     });
 
     document.querySelectorAll('.btn-delete-session').forEach(btn => {
@@ -1147,13 +1178,13 @@
           <input class="form-input" id="sess-format" value="${escHtml(sess.format||'Fysisk · 1 dag')}" placeholder="Fysisk · 1 dag">
         </div>
         <div class="form-group">
-          <label class="form-label">Pladser tilbage</label>
+          <label class="form-label">Kapacitet (pladser i alt)</label>
           <input class="form-input" id="sess-seats" type="number" min="0" max="999" value="${sess.seats||14}">
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
           <select class="form-select" id="sess-status">
-            ${['active','cancelled','full'].map(s=>`<option value="${s}" ${s==sess.status?'selected':''}>${{active:'Aktiv',cancelled:'Aflyst',full:'Udsolgt'}[s]}</option>`).join('')}
+            ${['active','full','cancelled','archived'].map(s=>`<option value="${s}" ${s==sess.status?'selected':''}>${{active:'Aktiv',full:'Udsolgt',cancelled:'Aflyst',archived:'Arkiveret'}[s]}</option>`).join('')}
           </select>
         </div>
         <div class="form-group form-col-full" style="flex-direction:row;gap:24px">
@@ -1212,22 +1243,40 @@
      PAGE: BOOKINGS
   ============================================================ */
   let bookingFilter = 'alle';
+  let bookingSessionFilter = null;
 
   async function renderBookings() {
-    const bookings = await api('/bookings');
+    const query = bookingSessionFilter ? ('?session_id=' + bookingSessionFilter) : '';
+    const bookings = await api('/bookings' + query);
     const filtered = bookingFilter === 'alle' ? bookings : bookings.filter(b => b.status === bookingFilter);
 
-    const pending = bookings.filter(b => b.status === 'pending').length;
+    // pending badge reflects ALL pending, not just the filtered view
+    const allForBadge = bookingSessionFilter ? await api('/bookings') : bookings;
+    const pending = allForBadge.filter(b => b.status === 'pending').length;
     document.getElementById('badge-bookings').textContent = pending > 0 ? pending : '';
+
+    const ctxRow = bookings[0];
+    const sessionBanner = bookingSessionFilter ? `
+      <div class="session-filter-banner">
+        <span>Viser bookinger for <b>${escHtml(ctxRow ? (ctxRow.course_title || 'hold') : 'hold')}</b>${ctxRow && ctxRow.date ? ' · ' + fmtDate(ctxRow.date) : ''}${ctxRow && ctxRow.location ? ' · ' + escHtml(ctxRow.location) : ''}</span>
+        <button class="btn btn-sm btn-ghost" id="clear-session-filter">Ryd filter ✕</button>
+      </div>` : '';
 
     content.innerHTML = `
       <div class="page-header">
         <div>
           <h1>Bookinger</h1>
-          <div class="page-header-sub">${bookings.length} bookinger i alt · ${pending} afventer bekræftelse</div>
+          <div class="page-header-sub">${bookings.length} bookinger${bookingSessionFilter ? ' for dette hold' : ' i alt'} · ${pending} afventer bekræftelse</div>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-accent" id="add-booking-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Ny booking
+          </button>
         </div>
       </div>
       <div class="page-body">
+        ${sessionBanner}
         <div class="toolbar">
           <div class="filter-chips">
             ${[['alle','Alle'],['pending','Afventer'],['confirmed','Bekræftet'],['cancelled','Annulleret']].map(([v,l])=>
@@ -1266,6 +1315,9 @@
                           ${b.status === 'pending' ? `
                             <button class="btn btn-sm btn-accent btn-confirm-booking" data-id="${b.id}" title="Bekræft">Bekræft</button>
                           ` : ''}
+                          <button class="btn-icon btn-edit-booking" data-id="${b.id}" title="Rediger">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
                           ${b.status !== 'cancelled' ? `
                             <button class="btn-icon btn-cancel-booking" data-id="${b.id}" title="Annuller">
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1285,6 +1337,15 @@
         bookingFilter = chip.dataset.filter;
         renderBookings();
       });
+    });
+
+    document.getElementById('add-booking-btn')?.addEventListener('click', () => openBookingForm());
+    document.getElementById('clear-session-filter')?.addEventListener('click', () => {
+      bookingSessionFilter = null;
+      renderBookings();
+    });
+    document.querySelectorAll('.btn-edit-booking').forEach(btn => {
+      btn.addEventListener('click', () => openBookingEdit(btn.dataset.id, filtered.find(b => b.id == btn.dataset.id)));
     });
 
     document.querySelectorAll('.btn-confirm-booking').forEach(btn => {
@@ -1309,6 +1370,229 @@
     });
   }
 
+  /* ---- manual booking (phone/email orders) ---- */
+  async function openBookingForm() {
+    let courses, sessions;
+    try { [courses, sessions] = await Promise.all([api('/courses'), api('/sessions')]); }
+    catch (e) { toast(e.message, 'error'); return; }
+    const active = courses.filter(c => c.status !== 'archived');
+    if (!active.length) { toast('Opret et kursus først', 'error'); return; }
+
+    const sessionOptions = (cid) => {
+      const list = sessions.filter(s => s.course_id == cid && s.status === 'active');
+      if (!list.length) return '<option value="">— ingen aktive hold —</option>';
+      return list.map(s => {
+        const rem = (s.seats_remaining != null) ? s.seats_remaining : s.seats;
+        return `<option value="${s.id}">${fmtDate(s.date)} · ${escHtml(s.location)} (${rem} tilbage)</option>`;
+      }).join('');
+    };
+
+    openModal('Ny booking', `
+      <div class="form-grid">
+        <div class="form-group form-col-full">
+          <label class="form-label">Kursus</label>
+          <select class="form-select" id="bk-course">${active.map(c => `<option value="${c.id}">${escHtml(c.title)}</option>`).join('')}</select>
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-label">Hold / dato</label>
+          <select class="form-select" id="bk-session">${sessionOptions(active[0].id)}</select>
+        </div>
+        <div class="form-group"><label class="form-label">Navn <span class="req">*</span></label><input class="form-input" id="bk-name"></div>
+        <div class="form-group"><label class="form-label">E-mail <span class="req">*</span></label><input class="form-input" id="bk-email" type="email"></div>
+        <div class="form-group"><label class="form-label">Virksomhed</label><input class="form-input" id="bk-company"></div>
+        <div class="form-group"><label class="form-label">Telefon</label><input class="form-input" id="bk-phone"></div>
+        <div class="form-group"><label class="form-label">Antal deltagere</label><input class="form-input" id="bk-participants" type="number" min="1" max="999" value="1"></div>
+        <div class="form-group"><label class="form-label">Betaling</label><select class="form-select" id="bk-payment">${['faktura','ean','kort','mobilepay'].map(p => `<option value="${p}">${p}</option>`).join('')}</select></div>
+        <div class="form-group form-col-full"><label class="form-label">Status</label><select class="form-select" id="bk-status"><option value="confirmed">Bekræftet</option><option value="pending">Afventer</option></select></div>
+        <div class="form-group form-col-full"><label class="form-label">Note (intern)</label><textarea class="form-textarea" id="bk-notes" placeholder="F.eks. telefonbestilling"></textarea></div>
+      </div>`,
+      `<button class="btn btn-ghost" id="cancel-bk">Annuller</button><button class="btn btn-accent" id="save-bk">Opret booking</button>`
+    );
+
+    const courseSel = document.getElementById('bk-course');
+    courseSel.addEventListener('change', () => { document.getElementById('bk-session').innerHTML = sessionOptions(courseSel.value); });
+    document.getElementById('cancel-bk').onclick = closeModal;
+    document.getElementById('save-bk').onclick = async () => {
+      const name = document.getElementById('bk-name').value.trim();
+      const email = document.getElementById('bk-email').value.trim();
+      if (!name || !email) { toast('Navn og e-mail er påkrævet', 'error'); return; }
+      const body = {
+        session_id: document.getElementById('bk-session').value || null,
+        customer_name: name, customer_email: email,
+        customer_company: document.getElementById('bk-company').value.trim(),
+        customer_phone: document.getElementById('bk-phone').value.trim(),
+        participants: parseInt(document.getElementById('bk-participants').value, 10) || 1,
+        payment_method: document.getElementById('bk-payment').value,
+        status: document.getElementById('bk-status').value,
+        notes: document.getElementById('bk-notes').value.trim(),
+      };
+      const btn = document.getElementById('save-bk'); btn.disabled = true; btn.textContent = 'Gemmer...';
+      try {
+        await api('/bookings', { method: 'POST', body });
+        toast('Booking oprettet'); closeModal(); renderBookings();
+      } catch (e) { toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Opret booking'; }
+    };
+  }
+
+  /* ---- edit an existing booking (participants / status / payment / note) ---- */
+  function openBookingEdit(id, b) {
+    if (!b) return;
+    openModal('Rediger booking', `
+      <div class="form-grid">
+        <div class="form-group form-col-full">
+          <div class="td-title">${escHtml(b.customer_name)}</div>
+          <div class="td-sub">${escHtml(b.course_title || '')}${b.date ? ' · ' + fmtDate(b.date) : ''}${b.location ? ' · ' + escHtml(b.location) : ''}</div>
+          <div class="td-sub"><a href="mailto:${escHtml(b.customer_email)}">${escHtml(b.customer_email)}</a>${b.customer_phone ? ' · ' + escHtml(b.customer_phone) : ''}</div>
+        </div>
+        <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="be-status">${['pending','confirmed','cancelled'].map(s => `<option value="${s}" ${s==b.status?'selected':''}>${{pending:'Afventer',confirmed:'Bekræftet',cancelled:'Annulleret'}[s]}</option>`).join('')}</select></div>
+        <div class="form-group"><label class="form-label">Antal deltagere</label><input class="form-input" id="be-participants" type="number" min="1" max="999" value="${b.participants||1}"></div>
+        <div class="form-group form-col-full"><label class="form-label">Betaling</label><select class="form-select" id="be-payment">${['faktura','ean','kort','mobilepay'].map(p => `<option value="${p}" ${p==b.payment_method?'selected':''}>${p}</option>`).join('')}</select></div>
+        <div class="form-group form-col-full"><label class="form-label">Note (intern)</label><textarea class="form-textarea" id="be-notes">${escHtml(b.notes||'')}</textarea></div>
+      </div>`,
+      `<button class="btn btn-ghost" id="cancel-be">Luk</button><button class="btn btn-accent" id="save-be">Gem ændringer</button>`
+    );
+    document.getElementById('cancel-be').onclick = closeModal;
+    document.getElementById('save-be').onclick = async () => {
+      const body = {
+        status: document.getElementById('be-status').value,
+        participants: parseInt(document.getElementById('be-participants').value, 10) || 1,
+        payment_method: document.getElementById('be-payment').value,
+        notes: document.getElementById('be-notes').value.trim(),
+      };
+      const btn = document.getElementById('save-be'); btn.disabled = true; btn.textContent = 'Gemmer...';
+      try {
+        await api('/bookings/' + id, { method: 'PUT', body });
+        toast('Booking opdateret'); closeModal(); renderBookings();
+      } catch (e) { toast(e.message, 'error'); btn.disabled = false; btn.textContent = 'Gem ændringer'; }
+    };
+  }
+
+  /* ============================================================
+     PAGE: INQUIRIES (Henvendelser)
+  ============================================================ */
+  let inquiryFilter = 'alle';
+
+  const INQUIRY_TYPES = {
+    contact:   { label: 'Kontakt',    cls: 'draft'     },
+    firmahold: { label: 'Firmahold',  cls: 'confirmed' },
+    notify:    { label: 'Nye datoer', cls: 'active'    },
+    udbyder:   { label: 'Udbyder',    cls: 'archived'  },
+  };
+
+  function inquiryTypePill(type) {
+    const t = INQUIRY_TYPES[type] || { label: type || '—', cls: 'draft' };
+    return `<span class="badge badge-${t.cls}"><span class="badge-dot"></span>${t.label}</span>`;
+  }
+
+  function inquiryStatusBadge(status) {
+    if (status === 'handled') return `<span class="badge badge-confirmed"><span class="badge-dot"></span>Behandlet</span>`;
+    return `<span class="badge badge-pending"><span class="badge-dot"></span>Ny</span>`;
+  }
+
+  async function renderInquiries() {
+    const inquiries = await api('/inquiries');
+    const filtered = inquiryFilter === 'alle'
+      ? inquiries
+      : inquiries.filter(i => i.status === inquiryFilter);
+
+    const newCount = inquiries.filter(i => i.status === 'new').length;
+    const badge = document.getElementById('badge-inquiries');
+    if (badge) badge.textContent = newCount > 0 ? newCount : '';
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Henvendelser</h1>
+          <div class="page-header-sub">${inquiries.length} henvendelser i alt · ${newCount} nye</div>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="toolbar">
+          <div class="filter-chips">
+            ${[['alle','Alle'],['new','Nye'],['handled','Behandlet']].map(([v,l])=>
+              `<button class="chip ${inquiryFilter===v?'active':''}" data-filter="${v}">${l}</button>`
+            ).join('')}
+          </div>
+        </div>
+
+        ${filtered.length === 0
+          ? `<div class="empty-state">
+              <div class="es-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+              <h3>Ingen henvendelser</h3>
+              <p>Beskeder fra kontakt-, firmahold- og notify-formularerne vises her.</p>
+            </div>`
+          : `<div class="table-wrap">
+              <table id="inquiries-table">
+                <thead><tr>
+                  <th>Type</th><th>Afsender</th><th>Virksomhed</th>
+                  <th>Emne / besked</th><th>Modtaget</th><th>Status</th><th></th>
+                </tr></thead>
+                <tbody>
+                  ${filtered.map(i => {
+                    const subjectBits = [];
+                    if (i.subject) subjectBits.push(escHtml(i.subject));
+                    if (i.course_title) subjectBits.push('Kursus: ' + escHtml(i.course_title));
+                    if (i.participants) subjectBits.push(i.participants + ' deltagere');
+                    const head = subjectBits.length ? `<div class="td-title">${subjectBits.join(' · ')}</div>` : '';
+                    const msg = i.message ? `<div class="td-sub">${escHtml(i.message)}</div>` : '';
+                    return `
+                    <tr>
+                      <td>${inquiryTypePill(i.type)}</td>
+                      <td>
+                        <div class="td-title">${escHtml(i.name || '—')}</div>
+                        <div class="td-sub"><a href="mailto:${escHtml(i.email)}" style="color:var(--accent)">${escHtml(i.email)}</a>${i.phone ? ' · ' + escHtml(i.phone) : ''}</div>
+                      </td>
+                      <td style="font-size:13px">${escHtml(i.company || '—')}</td>
+                      <td style="font-size:13px;color:var(--muted);max-width:340px">${head || msg ? head + msg : '—'}</td>
+                      <td style="font-size:13px">${fmtDate(i.created_at)}</td>
+                      <td>${inquiryStatusBadge(i.status)}</td>
+                      <td>
+                        <div class="td-actions">
+                          ${i.status !== 'handled' ? `
+                            <button class="btn btn-sm btn-accent btn-handle-inquiry" data-id="${i.id}" title="Markér behandlet">Behandlet</button>
+                          ` : ''}
+                          <button class="btn-icon btn-delete-inquiry" data-id="${i.id}" title="Slet">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>`
+        }
+      </div>`;
+
+    document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        inquiryFilter = chip.dataset.filter;
+        renderInquiries();
+      });
+    });
+
+    document.querySelectorAll('.btn-handle-inquiry').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/inquiries/' + btn.dataset.id, { method: 'PUT', body: { status: 'handled' } });
+          toast('Markeret som behandlet');
+          renderInquiries();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+
+    document.querySelectorAll('.btn-delete-inquiry').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!await confirm('Slet henvendelse', 'Slet denne henvendelse permanent?')) return;
+        try {
+          await api('/inquiries/' + btn.dataset.id, { method: 'DELETE' });
+          toast('Henvendelse slettet');
+          renderInquiries();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+  }
+
   /* ============================================================
      PAGES REGISTRY
   ============================================================ */
@@ -1319,6 +1603,7 @@
     categories:renderCategories,
     sessions:  renderSessions,
     bookings:  renderBookings,
+    inquiries: renderInquiries,
   };
 
   /* ============================================================
@@ -1336,6 +1621,7 @@
     a.addEventListener('click', e => {
       e.preventDefault();
       const page = a.dataset.page;
+      if (page === 'bookings') bookingSessionFilter = null; // nav = show all
       window.location.hash = page;
     });
   });
@@ -1351,5 +1637,52 @@
     });
   });
 
-  route();
+  /* ============ LOGIN GATE ============ */
+  function showLogin(message) {
+    const inputStyle = 'padding:13px 15px;border:1.5px solid var(--border,#ddd);border-radius:10px;font-size:15px;width:100%';
+    content.innerHTML = `
+      <div style="max-width:420px;margin:14vh auto 0;text-align:center">
+        <div style="font-family:'Instrument Serif',serif;font-size:2rem;margin-bottom:6px">Futurematch Admin</div>
+        <p style="color:var(--muted);margin-bottom:22px">Log ind for at fortsætte.</p>
+        ${message ? `<div style="background:#fde8e4;color:#a32;padding:10px 14px;border-radius:10px;margin-bottom:16px;font-size:14px">${escHtml(message)}</div>` : ''}
+        <form id="login-form" style="display:flex;flex-direction:column;gap:12px">
+          <input id="login-username" type="text" placeholder="Brugernavn" autocomplete="username" style="${inputStyle}">
+          <input id="login-password" type="password" placeholder="Adgangskode" autocomplete="current-password" style="${inputStyle}">
+          <button class="btn btn-accent" type="submit" style="justify-content:center;padding:13px">Log ind</button>
+        </form>
+      </div>`;
+    const form = document.getElementById('login-form');
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      if (!username || !password) return;
+      const btn = form.querySelector('button');
+      btn.disabled = true; btn.textContent = 'Logger ind…';
+      try {
+        const res = await fetch(API + '/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Login mislykkedes');
+        setToken(data.token);
+        boot();
+      } catch (err) {
+        showLogin(err.message || 'Login mislykkedes');
+      }
+    });
+    document.getElementById('login-username').focus();
+  }
+
+  async function boot() {
+    if (!adminToken) { showLogin(); return; }
+    try {
+      await api('/stats');          // validate stored token before showing the app
+    } catch (_) { return; }          // 401 handler shows login
+    route();
+  }
+
+  boot();
 })();

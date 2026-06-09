@@ -58,6 +58,9 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+/* the [hidden] attribute must always win: several overlays/state blocks use
+   display:flex/grid, which would otherwise override the UA [hidden]{display:none} */
+[hidden] { display: none !important; }
 
 html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 
@@ -76,6 +79,61 @@ body {
 img { max-width: 100%; display: block; }
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+/* ---------- accessibility helpers ---------- */
+/* visually hidden, still available to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+
+/* skip link — hidden until focused, then visible at top-left */
+.skip-link {
+  position: absolute; top: 0; left: 0; z-index: 1000;
+  transform: translateY(-120%);
+  background: var(--ink); color: var(--paper);
+  font-weight: 700; font-size: 14px;
+  padding: 12px 20px; border-radius: 0 0 12px 0;
+  text-decoration: none;
+  transition: transform 0.2s var(--ease);
+}
+.skip-link:focus {
+  transform: none;
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* clear, consistent keyboard focus ring on interactive elements */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.nav-cta:focus-visible,
+.lp-btn-primary:focus-visible,
+.btn-book:focus-visible,
+.btn-primary:focus-visible,
+.btn-light:focus-visible,
+.btn-supplier:focus-visible,
+.fc-submit:focus-visible,
+.bm-submit:focus-visible,
+.session:focus-visible,
+.loc-tab:focus-visible,
+.f-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* keep focus ring visible against the dark hero/booking summary */
+.session:focus-visible,
+.f-chip:focus-visible { outline-offset: 3px; }
+
+/* selected-session look applies to aria-checked too (kept alongside aria-selected) */
+.session[aria-checked="true"] { border-color: var(--accent); background: var(--paper); box-shadow: 0 0 0 1.5px var(--accent) inset; }
+.session[aria-checked="true"] .session-radio { border-color: var(--accent); }
+.session[aria-checked="true"] .session-radio::after { content: ""; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
 
 /* ---------- layout helpers ---------- */
 .wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: var(--gutter); }
@@ -991,6 +1049,8 @@ section { position: relative; }
   display: grid; place-items: center; padding: 20px;
   animation: bmFadeIn .2s ease;
 }
+/* the display:grid above overrides the UA [hidden]{display:none}; restore it */
+.booking-overlay[hidden] { display: none; }
 @keyframes bmFadeIn { from { opacity:0 } }
 
 .booking-modal {

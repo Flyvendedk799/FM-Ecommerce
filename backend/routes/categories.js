@@ -11,7 +11,7 @@ router.get('/', wrapAsync(async (req, res) => {
   const rows = await db.all(`
     SELECT cat.*, COUNT(c.id) as course_count
     FROM categories cat
-    LEFT JOIN courses c ON c.category_id = cat.id AND c.status != 'archived'
+    LEFT JOIN courses c ON c.category_id = cat.id AND c.status = 'active'
     GROUP BY cat.id
     ORDER BY cat.sort_order, cat.label
   `);

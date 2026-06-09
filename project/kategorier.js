@@ -39,6 +39,7 @@
   let activeQuery = null;   // non-null when in search-results mode
   let activeFormat = 'alle';
   let activeDur = 'alle';
+  let activeAvailability = 'alle';
   let activeSort = 'relevans';
 
   const view = document.getElementById('kat-view');
@@ -74,6 +75,39 @@
     return '<span class="cc-price">kr. ' + c.price.toLocaleString('da-DK') + '<small> ekskl. moms</small></span>';
   }
 
+  function fmtNextDate(dateStr) {
+    if (!dateStr) return '';
+    var d = new Date(dateStr + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+  }
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    var d = new Date(dateStr + 'T00:00:00');
+    if (Number.isNaN(d.getTime())) return null;
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((d - today) / 86400000);
+  }
+
+  function availabilityHTML(c) {
+    var hasDates = c.upcomingCount > 0 && c.nextDate;
+    if (!hasDates) {
+      return '<div class="cc-availability muted"><span>Kontakt for dato</span><span>Firmahold muligt</span></div>';
+    }
+    var until = daysUntil(c.nextDate);
+    var soon = until != null && until <= 30;
+    var seats = c.nextSeatsRemaining;
+    var seatText = seats != null && seats <= 4
+      ? '<span class="cc-seat-low">' + Math.max(0, seats) + ' pladser tilbage</span>'
+      : c.upcomingCount + ' dato' + (c.upcomingCount === 1 ? '' : 'er');
+    return '<div class="cc-availability">' +
+      '<span class="cc-date' + (soon ? ' soon' : '') + '">' + (soon ? 'Snart: ' : 'Næste: ') + escAttr(fmtNextDate(c.nextDate)) + '</span>' +
+      '<span>' + seatText + '</span>' +
+    '</div>';
+  }
+
   function formatChip(c) {
     var chips = ['<span class="cc-meta-chip">' + escAttr(c.dur) + '</span>'];
     if (c.online && c.format === 'Fysisk') chips.push('<span class="cc-meta-chip">+ Online</span>');
@@ -102,6 +136,7 @@
         '<h3 class="cc-title">' + escAttr(c.title) + '</h3>' +
         '<div class="cc-supplier">' + escAttr(c.supplier) + ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.</div>' +
         '<div class="cc-meta">' + formatChip(c) + '</div>' +
+        availabilityHTML(c) +
         '<div class="cc-foot">' + priceHTML(c) + '<span class="cc-cta">Se kursus →</span></div>' +
       '</div>' +
     '</a>';
@@ -110,6 +145,9 @@
   /* ============ OVERVIEW ============ */
   function renderOverview() {
     var catKeys = Object.keys(CATS);
+    var suppliersSeen = {};
+    COURSES.forEach(function(c) { if (c.supplier) suppliersSeen[c.supplier] = true; });
+    var supplierCount = Object.keys(suppliersSeen).length;
     var cards = catKeys.map(function(k, i) {
       var cat = CATS[k];
       var icons = {
@@ -145,7 +183,13 @@
             '<input type="text" id="kat-search-input" placeholder="Søg blandt 800+ kurser..." aria-label="Søg">' +
             '<button type="button">Søg</button>' +
           '</div>' +
-          '<div class="kat-total">293 kurser fra 120 udbydere</div>' +
+          '<div class="kat-quick" aria-label="Populære søgninger">' +
+            '<a href="#q=excel">Excel</a>' +
+            '<a href="#q=amu">AMU</a>' +
+            '<a href="#q=certificering">Certificering</a>' +
+            '<a href="#q=førstehjælp">Førstehjælp</a>' +
+          '</div>' +
+          '<div class="kat-total">' + COURSES.length + ' kurser fra ' + supplierCount + ' udbydere</div>' +
         '</div>' +
       '</section>' +
       '<section class="kat-overview wrap view-fade-in">' +
@@ -181,11 +225,22 @@
       if (activeFormat === 'fysisk' && c.online && c.format === 'Online') return false;
       if (activeDur === '1dag' && c.dur !== '1 dag') return false;
       if (activeDur === 'multi' && (c.dur === '1 dag')) return false;
+      if (activeAvailability === 'datoer' && !c.upcomingCount) return false;
+      if (activeAvailability === 'snart') {
+        var until = daysUntil(c.nextDate);
+        if (until == null || until > 45) return false;
+      }
       return true;
     }).sort(function(a,b) {
       if (activeSort === 'rating') return b.rating - a.rating;
       if (activeSort === 'pris-asc') return a.price - b.price;
       if (activeSort === 'pris-desc') return b.price - a.price;
+      if (activeSort === 'dato') {
+        if (!a.nextDate && !b.nextDate) return 0;
+        if (!a.nextDate) return 1;
+        if (!b.nextDate) return -1;
+        return a.nextDate.localeCompare(b.nextDate);
+      }
       return 0; // relevans = original order
     });
   }
@@ -196,7 +251,8 @@
       c.supplier || '',
       (CATS[c.cat] ? CATS[c.cat].label : ''),
       c.format || '',
-      c.dur || ''
+      c.dur || '',
+      c.nextDate ? fmtNextDate(c.nextDate) : ''
     ].join(' ').toLowerCase();
     // every whitespace-separated term must be present (AND search)
     return q.toLowerCase().split(/\s+/).filter(Boolean).every(function(term){
@@ -216,6 +272,16 @@
     var courses = getResults();
     var grid = document.getElementById('course-grid-inner');
     if (!grid) return;
+    var countEl = document.getElementById('result-count');
+    if (countEl) {
+      var noun = courses.length === 1 ? 'kursus' : 'kurser';
+      countEl.textContent = courses.length + ' ' + noun + ' matcher';
+    }
+    var clear = document.getElementById('clear-filters');
+    if (clear) {
+      clear.hidden = activeFormat === 'alle' && activeDur === 'alle' &&
+        activeAvailability === 'alle' && activeSort === 'relevans';
+    }
     if (courses.length === 0) {
       grid.innerHTML = activeQuery != null
         ? '<div class="no-courses"><h3>Ingen kurser matcher “' + escAttr(activeQuery) + '”</h3><p>Prøv et andet søgeord eller udforsk kategorierne.</p></div>'
@@ -279,9 +345,17 @@
             '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
             '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
           '</div>' +
+          '<div class="filter-sep"></div>' +
+          '<span class="filter-label">Dato</span>' +
+          '<div class="filter-group">' +
+            '<button class="f-chip' + (activeAvailability==='alle'?' active':'') + '" data-filter="availability" data-val="alle">Alle</button>' +
+            '<button class="f-chip' + (activeAvailability==='datoer'?' active':'') + '" data-filter="availability" data-val="datoer">Med datoer</button>' +
+            '<button class="f-chip' + (activeAvailability==='snart'?' active':'') + '" data-filter="availability" data-val="snart">Snart</button>' +
+          '</div>' +
           '<div class="filter-sort">' +
             'Sorter: <select id="sort-sel">' +
               '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
+              '<option value="dato"' + (activeSort==='dato'?' selected':'') + '>Næste dato</option>' +
               '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Rating</option>' +
               '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
               '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
@@ -294,6 +368,7 @@
         '<div class="cat-layout">' +
           '<nav class="cat-sidebar">' + sidebarItems + '</nav>' +
           '<div>' +
+            '<div class="results-bar"><span id="result-count"></span><button type="button" id="clear-filters" hidden>Ryd filtre</button></div>' +
             '<div class="course-grid view-fade-in" id="course-grid-inner"></div>' +
           '</div>' +
         '</div>' +
@@ -312,10 +387,17 @@
         var val = btn.getAttribute('data-val');
         if (filter === 'format') activeFormat = val;
         if (filter === 'dur') activeDur = val;
+        if (filter === 'availability') activeAvailability = val;
         view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
         renderCourseGrid();
       });
+    });
+
+    var clear = document.getElementById('clear-filters');
+    if (clear) clear.addEventListener('click', function() {
+      activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
+      renderCategory(catKey);
     });
 
     // sort
@@ -390,9 +472,17 @@
             '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
             '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
           '</div>' +
+          '<div class="filter-sep"></div>' +
+          '<span class="filter-label">Dato</span>' +
+          '<div class="filter-group">' +
+            '<button class="f-chip' + (activeAvailability==='alle'?' active':'') + '" data-filter="availability" data-val="alle">Alle</button>' +
+            '<button class="f-chip' + (activeAvailability==='datoer'?' active':'') + '" data-filter="availability" data-val="datoer">Med datoer</button>' +
+            '<button class="f-chip' + (activeAvailability==='snart'?' active':'') + '" data-filter="availability" data-val="snart">Snart</button>' +
+          '</div>' +
           '<div class="filter-sort">' +
             'Sorter: <select id="sort-sel">' +
               '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
+              '<option value="dato"' + (activeSort==='dato'?' selected':'') + '>Næste dato</option>' +
               '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Rating</option>' +
               '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
               '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
@@ -405,6 +495,7 @@
         '<div class="cat-layout">' +
           '<nav class="cat-sidebar">' + sidebarItems + '</nav>' +
           '<div>' +
+            '<div class="results-bar"><span id="result-count"></span><button type="button" id="clear-filters" hidden>Ryd filtre</button></div>' +
             '<div class="course-grid view-fade-in" id="course-grid-inner"></div>' +
           '</div>' +
         '</div>' +
@@ -434,10 +525,17 @@
         var val = btn.getAttribute('data-val');
         if (filter === 'format') activeFormat = val;
         if (filter === 'dur') activeDur = val;
+        if (filter === 'availability') activeAvailability = val;
         view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
         renderCourseGrid();
       });
+    });
+
+    var clear = document.getElementById('clear-filters');
+    if (clear) clear.addEventListener('click', function() {
+      activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
+      renderSearch(q);
     });
 
     // sort
@@ -458,7 +556,7 @@
   /* ============ ROUTING ============ */
   function route() {
     var hash = window.location.hash.slice(1);
-    activeFormat = 'alle'; activeDur = 'alle'; activeSort = 'relevans';
+    activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
     if (hash.indexOf('q=') === 0) {
       var q = decodeURIComponent(hash.slice(2));
       if (q.trim()) renderSearch(q.trim());
@@ -508,6 +606,10 @@
             price:    c.price || 0,
             color:    c.color || '#2C1A0A',
             badge:    c.badge || null,
+            nextDate: c.next_session_date || '',
+            upcomingCount: Number(c.upcoming_session_count || 0),
+            nextSeatsRemaining: c.next_session_seats_remaining == null ? null : Number(c.next_session_seats_remaining),
+            minSeatsRemaining: c.min_seats_remaining == null ? null : Number(c.min_seats_remaining),
             url:      'kursus.html?id=' + c.id
           };
         });

@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const requireAdmin = require('../middleware/requireAdmin');
 const wrapAsync = require('../middleware/wrapAsync');
-const { statusOrDefault, statusStrict, intInRange, numInRange, jsonArray } = require('../validate');
+const { statusOrDefault, statusStrict, intInRange, numInRange, jsonArray, todayISO } = require('../validate');
 
 /* ---- auth: reads are public; writes are admin ---- */
 router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
@@ -22,15 +22,36 @@ function parseJSON(row) {
 
 router.get('/', wrapAsync(async (req, res) => {
   const { category, status, supplier, q } = req.query;
+  const today = todayISO();
   let sql = `
     SELECT c.*, s.name as supplier_name, s.abbr as supplier_abbr,
-           cat.label as category_label, cat.key as category_key, cat.accent as category_accent
+           cat.label as category_label, cat.key as category_key, cat.accent as category_accent,
+           (SELECT MIN(sess.date)
+              FROM sessions sess
+              WHERE sess.course_id = c.id AND sess.status = 'active' AND sess.date >= ?) AS next_session_date,
+           (SELECT COUNT(*)
+              FROM sessions sess
+              WHERE sess.course_id = c.id AND sess.status = 'active' AND sess.date >= ?) AS upcoming_session_count,
+           (SELECT sess.seats - COALESCE(
+              (SELECT SUM(b.participants)
+                 FROM bookings b
+                 WHERE b.session_id = sess.id AND b.status != 'cancelled'), 0)
+              FROM sessions sess
+              WHERE sess.course_id = c.id AND sess.status = 'active' AND sess.date >= ?
+              ORDER BY sess.date ASC, sess.id ASC
+              LIMIT 1) AS next_session_seats_remaining,
+           (SELECT MIN(sess.seats - COALESCE(
+              (SELECT SUM(b.participants)
+                 FROM bookings b
+                 WHERE b.session_id = sess.id AND b.status != 'cancelled'), 0))
+              FROM sessions sess
+              WHERE sess.course_id = c.id AND sess.status = 'active' AND sess.date >= ?) AS min_seats_remaining
     FROM courses c
     LEFT JOIN suppliers s ON s.id = c.supplier_id
     LEFT JOIN categories cat ON cat.id = c.category_id
     WHERE 1=1
   `;
-  const params = [];
+  const params = [today, today, today, today];
   if (category) { sql += ' AND cat.key = ?'; params.push(category); }
   if (status)   { sql += ' AND c.status = ?'; params.push(status); }
   if (supplier) { sql += ' AND c.supplier_id = ?'; params.push(supplier); }

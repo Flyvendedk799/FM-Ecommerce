@@ -188,7 +188,13 @@
     <a href="Landing.html#how">Sådan virker det</a>
     <a href="Landing.html#for-udbydere">For udbydere</a>
   </div>
-  <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+  <div class="nav-actions">
+    <a class="nav-cart" href="Kurv.html" data-cart-link>
+      <span class="nav-cart-label">Kurv</span>
+      <span class="cart-count" data-cart-count hidden>0</span>
+    </a>
+    <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+  </div>
 </nav>
 
 <main id="kat-view"><!-- JS renders here --></main>
@@ -228,6 +234,7 @@
   <div class="footer-bottom"><span>© 2026 Futurematch ApS · CVR 12345678</span><span>Lavet i Danmark 🇩🇰</span></div>
 </footer>
 
+<script src="cart.js"></script>
 <script src="kategorier.js"></script>
 </body>
 </html>

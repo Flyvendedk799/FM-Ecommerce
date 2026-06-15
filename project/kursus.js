@@ -177,7 +177,7 @@
     document.getElementById('sb-title').textContent = course.title;
     document.getElementById('sb-price').textContent = fmtPrice(course.price, badge) + ' ekskl. moms';
     document.getElementById('sb-sub').textContent = hasBookableSessions ? 'Vælg dato og lokation' : 'Få besked om nye datoer';
-    document.getElementById('sb-cta').textContent = hasBookableSessions ? 'Reservér plads' : 'Få besked';
+    document.getElementById('sb-cta').textContent = hasBookableSessions ? 'Læg i kurv' : 'Få besked';
     if (course.rating) {
       document.getElementById('sb-rating').hidden = false;
       document.getElementById('sb-rating-val').textContent = (+course.rating).toFixed(1);
@@ -188,6 +188,7 @@
     bindScrollBtns();
     initSessionPicker(byLoc, locKeys, course);
     initCurriculum();
+    initCartActions(course);
     initBookingModal(course);
     initParallax();
     initRailFill();
@@ -414,8 +415,9 @@ ${course.rating && course.review_count ? `
         <span class="tval">${badge==='amu'||!course.price?'Gratis*':(+course.price).toLocaleString('da-DK')+'<small> kr.</small>'}</span>
       </div>
       <div class="bs-scarcity" id="sum-scarcity" hidden></div>
-      <button class="btn-primary" id="booking-cta">Reservér plads <span class="arrow">→</span></button>
-      <div class="bs-microcopy">Ingen betaling nu — bekræft uden binding</div>
+      <button class="btn-primary" id="add-cart-cta">Læg i kurv <span class="arrow">→</span></button>
+      <button class="btn-book" id="direct-booking-cta" style="width:100%;justify-content:center;border-radius:100px;background:transparent;border:1.5px solid var(--line);color:var(--ink);margin-top:10px">Reservér direkte</button>
+      <div class="bs-microcopy">Checkout uden betaling — vi bekræfter inden for 24 timer</div>
       <ul class="bs-included">
         ${included.map(i => `<li>${esc(i)}</li>`).join('') || '<li>Kursusbevis inkluderet</li>'}
       </ul>
@@ -575,7 +577,7 @@ ${related.length === 0 ? `
     const scarc   = document.getElementById('sum-scarcity');
     const sbSub   = document.getElementById('sb-sub');
 
-    const bookingCta = document.getElementById('booking-cta');
+    const bookingCta = document.getElementById('add-cart-cta');
 
     // Prefer real remaining capacity over total seats when the API provides it.
     function seatsOf(s) { return sessionSeatsRemaining(s); }
@@ -584,10 +586,10 @@ ${related.length === 0 ? `
 
     function setBookingCta(bookable) {
       if (bookingCta) bookingCta.innerHTML = bookable
-        ? 'Reservér plads <span class="arrow">→</span>'
+        ? 'Læg i kurv <span class="arrow">→</span>'
         : 'Skriv mig på venteliste <span class="arrow">→</span>';
       const sbBtn = document.getElementById('sb-cta');
-      if (sbBtn) sbBtn.textContent = bookable ? 'Reservér plads' : 'Få besked';
+      if (sbBtn) sbBtn.textContent = bookable ? 'Læg i kurv' : 'Få besked';
     }
 
     if (list) {
@@ -613,7 +615,7 @@ ${related.length === 0 ? `
       card.setAttribute('aria-checked', 'true');
       card.tabIndex = 0;
       const dt = card.dataset;
-      selectedSession = { id: +dt.id, date: dt.date, location: dt.loc, format: dt.format };
+      selectedSession = { id: +dt.id, date: dt.date, location: dt.loc, venue: dt.venue || '', format: dt.format };
       if (sumLoc)  sumLoc.textContent  = dt.loc;
       if (sumDate) sumDate.textContent = fmtDateFull(dt.date);
       if (sumFmt)  sumFmt.textContent  = dt.format;
@@ -668,6 +670,7 @@ ${related.length === 0 ? `
         el.dataset.id     = s.id;
         el.dataset.date   = s.date;
         el.dataset.loc    = s.location;
+        el.dataset.venue  = s.venue || '';
         el.dataset.format = s.format;
         el.dataset.seats  = seats;
         el.dataset.online = String(!!s.is_online);
@@ -738,6 +741,70 @@ ${related.length === 0 ? `
         if (!active) p.classList.add('active');
       });
     });
+  }
+
+  /* ============================================================
+     CART ACTIONS
+  ============================================================ */
+  function initCartActions(course) {
+    const Cart = window.FuturematchCart;
+
+    function flashButton(btn) {
+      if (!btn) return;
+      const original = btn.innerHTML;
+      btn.innerHTML = 'Lagt i kurv <span class="arrow">✓</span>';
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.innerHTML = original;
+        btn.disabled = false;
+      }, 1200);
+    }
+
+    function toast(message) {
+      const old = document.querySelector('.cart-toast');
+      if (old) old.remove();
+      const el = document.createElement('div');
+      el.className = 'cart-toast';
+      el.textContent = message;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2400);
+    }
+
+    function addSelectedToCart(sourceBtn) {
+      if (!selectedSession) {
+        const directBooking = document.getElementById('direct-booking-cta');
+        if (directBooking) {
+          directBooking.click();
+          return;
+        }
+        const dates = document.getElementById('datoer');
+        if (dates) dates.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+        toast('Vælg en dato først');
+        return;
+      }
+      if (!Cart) return;
+      Cart.addItem({
+        session_id: selectedSession.id,
+        course_id: course.id,
+        course_title: course.title,
+        supplier_name: course.supplier_name || '',
+        date: selectedSession.date,
+        location: selectedSession.location,
+        venue: selectedSession.venue || '',
+        format: selectedSession.format,
+        participants: 1,
+        unit_price: +course.price || 0,
+        badge: course.badge || '',
+        url: 'kursus.html?id=' + course.id,
+      });
+      flashButton(sourceBtn);
+      toast(course.title + ' er lagt i kurven');
+    }
+
+    const cartBtn = document.getElementById('add-cart-cta');
+    cartBtn?.addEventListener('click', () => addSelectedToCart(cartBtn));
+    const stickyBtn = document.getElementById('sb-cta');
+    stickyBtn?.addEventListener('click', () => addSelectedToCart(stickyBtn));
   }
 
   /* ============================================================
@@ -918,10 +985,9 @@ ${related.length === 0 ? `
     }
 
     // Open triggers
-    document.getElementById('booking-cta')?.addEventListener('click', openFromClick('booking'));
+    document.getElementById('direct-booking-cta')?.addEventListener('click', openFromClick('booking'));
     document.getElementById('no-dates-cta')?.addEventListener('click', openFromClick('notify'));
     document.getElementById('firma-book-btn')?.addEventListener('click', openFromClick('firmahold'));
-    document.querySelector('#stickybar .sb-btn')?.addEventListener('click', openFromClick('booking'));
 
     // Close triggers
     document.getElementById('bm-close')?.addEventListener('click', closeModal);

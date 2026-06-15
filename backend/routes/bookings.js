@@ -23,10 +23,12 @@ async function bookedSeats(ex, sessionId, excludeBookingId) {
 router.get('/', wrapAsync(async (req, res) => {
   const { status, session_id } = req.query;
   let sql = `
-    SELECT b.*, sess.date, sess.location, c.title as course_title
+    SELECT b.*, sess.date, sess.location, c.title as course_title,
+           o.reference as order_reference
     FROM bookings b
     LEFT JOIN sessions sess ON sess.id = b.session_id
     LEFT JOIN courses c ON c.id = sess.course_id
+    LEFT JOIN orders o ON o.id = b.order_id
     WHERE 1=1
   `;
   const params = [];
@@ -41,10 +43,12 @@ router.get('/stats/summary', wrapAsync(async (req, res) => res.json(await getSta
 
 router.get('/:id', wrapAsync(async (req, res) => {
   const row = await db.get(`
-    SELECT b.*, sess.date, sess.location, sess.venue, c.title as course_title
+    SELECT b.*, sess.date, sess.location, sess.venue, c.title as course_title,
+           o.reference as order_reference
     FROM bookings b
     LEFT JOIN sessions sess ON sess.id = b.session_id
     LEFT JOIN courses c ON c.id = sess.course_id
+    LEFT JOIN orders o ON o.id = b.order_id
     WHERE b.id = ?
   `, req.params.id);
   if (!row) return res.status(404).json({ error: 'Not found' });

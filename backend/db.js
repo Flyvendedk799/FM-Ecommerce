@@ -214,8 +214,34 @@ function schemaSql(isPg) {
     created_at TEXT DEFAULT ${NOW}
   );
 
+  CREATE TABLE IF NOT EXISTS orders (
+    id ${ID},
+    reference TEXT UNIQUE NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT NOT NULL,
+    customer_company TEXT DEFAULT '',
+    customer_phone TEXT DEFAULT '',
+    billing_address TEXT DEFAULT '',
+    billing_zip TEXT DEFAULT '',
+    billing_city TEXT DEFAULT '',
+    billing_country TEXT DEFAULT 'Danmark',
+    ean TEXT DEFAULT '',
+    vat_number TEXT DEFAULT '',
+    payment_method TEXT DEFAULT 'faktura',
+    subtotal_ex_vat INTEGER DEFAULT 0,
+    discount_total INTEGER DEFAULT 0,
+    total_ex_vat INTEGER DEFAULT 0,
+    vat_total INTEGER DEFAULT 0,
+    total_inc_vat INTEGER DEFAULT 0,
+    currency TEXT DEFAULT 'DKK',
+    status TEXT DEFAULT 'pending',
+    notes TEXT DEFAULT '',
+    created_at TEXT DEFAULT ${NOW}
+  );
+
   CREATE TABLE IF NOT EXISTS bookings (
     id ${ID},
+    order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
     session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
     customer_name TEXT NOT NULL,
     customer_email TEXT NOT NULL,
@@ -223,6 +249,9 @@ function schemaSql(isPg) {
     customer_phone TEXT DEFAULT '',
     participants INTEGER DEFAULT 1,
     payment_method TEXT DEFAULT 'faktura',
+    unit_price INTEGER DEFAULT 0,
+    discount INTEGER DEFAULT 0,
+    line_total INTEGER DEFAULT 0,
     notes TEXT DEFAULT '',
     status TEXT DEFAULT 'pending',
     created_at TEXT DEFAULT ${NOW}
@@ -249,11 +278,48 @@ function schemaSql(isPg) {
   CREATE INDEX IF NOT EXISTS idx_courses_category  ON courses(category_id);
   CREATE INDEX IF NOT EXISTS idx_courses_status    ON courses(status);
   CREATE INDEX IF NOT EXISTS idx_sessions_course   ON sessions(course_id);
+  CREATE INDEX IF NOT EXISTS idx_orders_status     ON orders(status);
+  CREATE INDEX IF NOT EXISTS idx_orders_reference  ON orders(reference);
   CREATE INDEX IF NOT EXISTS idx_bookings_session  ON bookings(session_id);
   CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_inquiries_course  ON inquiries(course_id);
   CREATE INDEX IF NOT EXISTS idx_inquiries_status  ON inquiries(status);
   `;
+}
+
+function quoteIdent(name) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(name))) {
+    throw new Error('Invalid SQL identifier');
+  }
+  return `"${name}"`;
+}
+
+async function hasColumn(x, table, column) {
+  if (x.name === 'pg') {
+    return !!(await x.get(`
+      SELECT 1 AS ok
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = ?
+        AND column_name = ?
+    `, table, column));
+  }
+  const cols = await x.all(`PRAGMA table_info(${quoteIdent(table)})`);
+  return cols.some(c => c.name === column);
+}
+
+async function ensureColumn(x, table, column, sqliteDefinition, pgDefinition = sqliteDefinition) {
+  if (await hasColumn(x, table, column)) return;
+  const definition = x.name === 'pg' ? pgDefinition : sqliteDefinition;
+  await x.exec(`ALTER TABLE ${quoteIdent(table)} ADD COLUMN ${quoteIdent(column)} ${definition}`);
+}
+
+async function migrate(x) {
+  await ensureColumn(x, 'bookings', 'order_id', 'INTEGER');
+  await ensureColumn(x, 'bookings', 'unit_price', 'INTEGER DEFAULT 0');
+  await ensureColumn(x, 'bookings', 'discount', 'INTEGER DEFAULT 0');
+  await ensureColumn(x, 'bookings', 'line_total', 'INTEGER DEFAULT 0');
+  await x.exec('CREATE INDEX IF NOT EXISTS idx_bookings_order ON bookings(order_id)');
 }
 
 /* ============ SEED DATA ============ */
@@ -574,6 +640,7 @@ const driver = process.env.DATABASE_URL ? pgDriver() : sqliteDriver();
 
 const ready = (async () => {
   await driver.exec(schemaSql(driver.name === 'pg'));
+  await migrate(driver);
   await seed(driver);
   await backfillSessions(driver);
 })();

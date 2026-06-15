@@ -157,6 +157,12 @@
     return '<span class="price-display">kr. ' + price.toLocaleString('da-DK') + '</span>';
   }
 
+  function fmtMoney(amount) {
+    const n = Number(amount || 0);
+    if (!n) return 'Gratis';
+    return 'kr. ' + n.toLocaleString('da-DK');
+  }
+
   function fmtRating(rating, reviews) {
     if (!rating) return '—';
     return `<span class="rating-display"><span class="rating-star">★</span>${(+rating).toFixed(1)} <span style="color:var(--muted);font-weight:400">(${(reviews||0).toLocaleString('da-DK')})</span></span>`;
@@ -354,6 +360,11 @@
             <div class="stat-sub">Kommende datoer</div>
           </div>
           <div class="stat-card">
+            <div class="stat-label">Ordrer</div>
+            <div class="stat-value">${stats.total_orders}</div>
+            <div class="stat-sub">${stats.pending_orders} afventer · ${stats.confirmed_orders} bekræftet</div>
+          </div>
+          <div class="stat-card">
             <div class="stat-label">Bookinger</div>
             <div class="stat-value">${stats.total_bookings}</div>
             <div class="stat-sub">${stats.pending_bookings} afventer · ${stats.confirmed_bookings} bekræftet</div>
@@ -382,6 +393,25 @@
 
           <div class="dash-card">
             <div class="dash-card-head">
+              <h3>Seneste ordrer</h3>
+              <a href="#orders" class="btn btn-sm btn-ghost">Se alle</a>
+            </div>
+            <table class="dash-table">
+              <thead><tr><th>Ordre</th><th>Kunde</th><th>Total</th><th>Status</th></tr></thead>
+              <tbody>
+                ${(stats.recent_orders || []).map(o => `
+                  <tr>
+                    <td><div class="td-title">${escHtml(o.reference)}</div><div class="td-sub">${o.item_count || 0} hold · ${o.participants_count || 0} deltagere</div></td>
+                    <td style="font-size:13px;color:var(--muted)">${escHtml(o.customer_name || '—')}</td>
+                    <td>${fmtMoney(o.total_inc_vat)}</td>
+                    <td>${statusBadge(o.status)}</td>
+                  </tr>`).join('') || '<tr><td colspan="4" style="color:var(--muted);font-size:13px">Ingen ordrer endnu</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="dash-card">
+            <div class="dash-card-head">
               <h3>Seneste bookinger</h3>
               <a href="#bookings" class="btn btn-sm btn-ghost">Se alle</a>
             </div>
@@ -403,6 +433,8 @@
     // Update nav badges
     document.getElementById('badge-courses').textContent = stats.total_courses;
     document.getElementById('badge-suppliers').textContent = stats.total_suppliers;
+    const orderBadge = document.getElementById('badge-orders');
+    if (orderBadge) orderBadge.textContent = stats.pending_orders > 0 ? stats.pending_orders : '';
     if (stats.pending_bookings > 0) {
       document.getElementById('badge-bookings').textContent = stats.pending_bookings;
     }
@@ -1353,7 +1385,7 @@
                     <tr>
                       <td>
                         <div class="td-title">${escHtml(b.customer_name)}</div>
-                        <div class="td-sub">${escHtml(b.customer_email)}</div>
+                        <div class="td-sub">${escHtml(b.customer_email)}${b.order_reference ? ' · ' + escHtml(b.order_reference) : ''}</div>
                       </td>
                       <td style="font-size:13px">${escHtml(b.customer_company||'—')}</td>
                       <td style="font-size:13px;color:var(--muted)">${escHtml(b.course_title||'—')}<br><span style="font-size:11.5px">${escHtml(b.location||'')}</span></td>
@@ -1521,6 +1553,193 @@
   }
 
   /* ============================================================
+     PAGE: ORDERS
+  ============================================================ */
+  let orderFilter = 'alle';
+
+  function compactOrderTitle(order) {
+    const title = order.first_course_title || '';
+    if (!title) return '—';
+    const extra = Math.max(0, (+order.item_count || 0) - 1);
+    return extra ? `${title} +${extra}` : title;
+  }
+
+  async function renderOrders() {
+    const orders = await api('/orders');
+    const filtered = orderFilter === 'alle' ? orders : orders.filter(o => o.status === orderFilter);
+    const pending = orders.filter(o => o.status === 'pending').length;
+    const badge = document.getElementById('badge-orders');
+    if (badge) badge.textContent = pending > 0 ? pending : '';
+
+    content.innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Ordrer</h1>
+          <div class="page-header-sub">${orders.length} webshopordrer i alt · ${pending} afventer bekræftelse</div>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="toolbar">
+          <div class="filter-chips">
+            ${[['alle','Alle'],['pending','Afventer'],['confirmed','Bekræftet'],['cancelled','Annulleret']].map(([v,l]) =>
+              `<button class="chip ${orderFilter===v?'active':''}" data-filter="${v}">${l}</button>`
+            ).join('')}
+          </div>
+        </div>
+
+        ${filtered.length === 0
+          ? `<div class="empty-state">
+              <div class="es-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z"/></svg></div>
+              <h3>Ingen ordrer</h3>
+              <p>Checkoutordrer vises her, når kunder sender en kurv.</p>
+            </div>`
+          : `<div class="table-wrap">
+              <table id="orders-table">
+                <thead><tr>
+                  <th>Ordre</th><th>Kunde</th><th>Kurser</th>
+                  <th>Deltagere</th><th>Total</th><th>Betaling</th><th>Status</th><th></th>
+                </tr></thead>
+                <tbody>
+                  ${filtered.map(o => `
+                    <tr>
+                      <td>
+                        <div class="td-title">${escHtml(o.reference)}</div>
+                        <div class="td-sub">${fmtDate(o.created_at)}</div>
+                      </td>
+                      <td>
+                        <div class="td-title">${escHtml(o.customer_name)}</div>
+                        <div class="td-sub">${escHtml(o.customer_company || o.customer_email)}</div>
+                      </td>
+                      <td style="font-size:13px;color:var(--muted);max-width:280px">${escHtml(compactOrderTitle(o))}</td>
+                      <td style="text-align:center;font-weight:700">${o.participants_count || 0}</td>
+                      <td>${fmtMoney(o.total_inc_vat)}</td>
+                      <td><span class="pill">${escHtml(o.payment_method || '—')}</span></td>
+                      <td>${statusBadge(o.status)}</td>
+                      <td>
+                        <div class="td-actions">
+                          ${o.status === 'pending' ? `<button class="btn btn-sm btn-accent btn-confirm-order" data-id="${o.id}">Bekræft</button>` : ''}
+                          <button class="btn-icon btn-view-order" data-id="${o.id}" title="Se ordre">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                          </button>
+                          ${o.status !== 'cancelled' ? `
+                            <button class="btn-icon btn-cancel-order" data-id="${o.id}" title="Annuller ordre">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          ` : ''}
+                        </div>
+                      </td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>`
+        }
+      </div>`;
+
+    document.querySelectorAll('.chip[data-filter]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        orderFilter = chip.dataset.filter;
+        renderOrders();
+      });
+    });
+    document.querySelectorAll('.btn-view-order').forEach(btn => {
+      btn.addEventListener('click', () => openOrderDetails(btn.dataset.id));
+    });
+    document.querySelectorAll('.btn-confirm-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await api('/orders/' + btn.dataset.id, { method: 'PUT', body: { status: 'confirmed' } });
+          toast('Ordre bekræftet');
+          renderOrders();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+    document.querySelectorAll('.btn-cancel-order').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!await confirm('Annuller ordre', 'Annuller ordren og de tilknyttede bookinger?')) return;
+        try {
+          await api('/orders/' + btn.dataset.id, { method: 'PUT', body: { status: 'cancelled' } });
+          toast('Ordre annulleret');
+          renderOrders();
+        } catch (e) { toast(e.message, 'error'); }
+      });
+    });
+  }
+
+  async function openOrderDetails(id) {
+    let order;
+    try { order = await api('/orders/' + id); } catch (e) { toast(e.message, 'error'); return; }
+    const items = Array.isArray(order.items) ? order.items : [];
+    openModal('Ordre ' + order.reference, `
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Kunde</label>
+          <div class="td-title">${escHtml(order.customer_name)}</div>
+          <div class="td-sub">${escHtml(order.customer_email)}${order.customer_phone ? ' · ' + escHtml(order.customer_phone) : ''}</div>
+          <div class="td-sub">${escHtml(order.customer_company || '—')}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fakturering</label>
+          <div class="td-sub">${escHtml(order.billing_address || '—')}</div>
+          <div class="td-sub">${escHtml([order.billing_zip, order.billing_city].filter(Boolean).join(' '))}</div>
+          <div class="td-sub">${order.ean ? 'EAN ' + escHtml(order.ean) : ''}${order.vat_number ? (order.ean ? ' · ' : '') + 'CVR ' + escHtml(order.vat_number) : ''}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="ord-status">${['pending','confirmed','cancelled'].map(s => `<option value="${s}" ${s==order.status?'selected':''}>${{pending:'Afventer',confirmed:'Bekræftet',cancelled:'Annulleret'}[s]}</option>`).join('')}</select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Betaling</label>
+          <div><span class="pill">${escHtml(order.payment_method || '—')}</span></div>
+          <div class="td-sub" style="margin-top:8px">${fmtMoney(order.total_inc_vat)} inkl. moms · ${fmtMoney(order.total_ex_vat)} ekskl. moms</div>
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-label">Ordrelinjer</label>
+          <div class="table-wrap" style="box-shadow:none">
+            <table>
+              <thead><tr><th>Kursus</th><th>Dato</th><th>Deltagere</th><th>Linje</th><th>Status</th></tr></thead>
+              <tbody>
+                ${items.map(item => `
+                  <tr>
+                    <td><div class="td-title">${escHtml(item.course_title || '—')}</div><div class="td-sub">${escHtml(item.supplier_name || '')}${item.location ? ' · ' + escHtml(item.location) : ''}</div></td>
+                    <td style="font-size:13px">${item.date ? fmtDate(item.date) : '—'}</td>
+                    <td style="text-align:center;font-weight:700">${item.participants || 0}</td>
+                    <td>${fmtMoney(item.line_total)}</td>
+                    <td>${statusBadge(item.status)}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-label">Intern note</label>
+          <textarea class="form-textarea" id="ord-notes">${escHtml(order.notes || '')}</textarea>
+        </div>
+      </div>`,
+      `<button class="btn btn-ghost" id="cancel-order-edit">Luk</button><button class="btn btn-accent" id="save-order-edit">Gem ordre</button>`
+    );
+    document.getElementById('cancel-order-edit').onclick = closeModal;
+    document.getElementById('save-order-edit').onclick = async () => {
+      const btn = document.getElementById('save-order-edit');
+      btn.disabled = true; btn.textContent = 'Gemmer...';
+      try {
+        await api('/orders/' + id, {
+          method: 'PUT',
+          body: {
+            status: document.getElementById('ord-status').value,
+            notes: document.getElementById('ord-notes').value.trim(),
+          },
+        });
+        toast('Ordre opdateret');
+        closeModal();
+        renderOrders();
+      } catch (e) {
+        toast(e.message, 'error');
+        btn.disabled = false; btn.textContent = 'Gem ordre';
+      }
+    };
+  }
+
+  /* ============================================================
      PAGE: INQUIRIES (Henvendelser)
   ============================================================ */
   let inquiryFilter = 'alle';
@@ -1656,6 +1875,7 @@
     categories:renderCategories,
     sessions:  renderSessions,
     bookings:  renderBookings,
+    orders:    renderOrders,
     inquiries: renderInquiries,
   };
 

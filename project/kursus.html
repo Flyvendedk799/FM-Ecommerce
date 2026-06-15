@@ -33,7 +33,13 @@
     <a href="#datoer" id="nav-datoer">Datoer</a>
     <a href="#indhold" id="nav-indhold">Indhold</a>
   </div>
-  <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+  <div class="nav-actions">
+    <a class="nav-cart" href="Kurv.html" data-cart-link>
+      <span class="nav-cart-label">Kurv</span>
+      <span class="cart-count" data-cart-count hidden>0</span>
+    </a>
+    <a class="nav-cta" href="Kategorier.html">Se alle kurser</a>
+  </div>
 </nav>
 
 <!-- Primary content landmark (kursus.js injects its own <main id="top"> into #kursus-content) -->
@@ -108,7 +114,7 @@
     <div class="sb-right">
       <div class="sb-rating" id="sb-rating" hidden><span class="st">★</span> <b id="sb-rating-val">4.8</b></div>
       <div class="sb-price" id="sb-price"></div>
-      <button class="sb-btn" id="sb-cta" data-scroll="#datoer">Reservér plads</button>
+      <button class="sb-btn" id="sb-cta">Læg i kurv</button>
     </div>
   </div>
 </div>
@@ -222,6 +228,7 @@
 </div>
 
 <script src="image-slot.js"></script>
+<script src="cart.js"></script>
 <script src="kursus.js"></script>
 </body>
 </html>

@@ -52,6 +52,7 @@ if (!config.isTest) {
     message: { error: 'For mange forsøg — prøv igen om lidt.' } });
   const onlyPost = (req, res, next) => (req.method === 'POST' ? publicWrite(req, res, next) : next());
   app.use('/api/bookings', onlyPost);
+  app.use('/api/checkout', onlyPost);
   app.use('/api/inquiries', onlyPost);
   // brute-force guard on admin login
   app.use('/api/admin/login', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
@@ -65,6 +66,8 @@ app.use('/api/courses',    require('./routes/courses'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/sessions',   require('./routes/sessions'));
 app.use('/api/bookings',   require('./routes/bookings'));
+app.use('/api/checkout',   require('./routes/checkout'));
+app.use('/api/orders',     require('./routes/orders'));
 app.use('/api/inquiries',  require('./routes/inquiries'));
 // Direct stats (admin-only) — single hop, no redirect.
 app.get('/api/stats', requireAdmin, wrapAsync(async (req, res) => res.json(await getStats())));

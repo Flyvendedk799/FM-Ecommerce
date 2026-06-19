@@ -178,12 +178,12 @@
     const map = {
       active: 'active', draft: 'draft', archived: 'archived',
       pending: 'pending', confirmed: 'confirmed', cancelled: 'cancelled',
-      inactive: 'inactive', full: 'pending',
+      inactive: 'inactive', full: 'pending', expired: 'archived',
     };
     const labels = {
       active:'Aktiv', draft:'Kladde', archived:'Arkiveret',
       pending:'Afventer', confirmed:'Bekræftet', cancelled:'Annulleret',
-      inactive:'Inaktiv', full:'Udsolgt',
+      inactive:'Inaktiv', full:'Udsolgt', expired:'Udløbet',
     };
     const cls = map[status] || 'draft';
     return `<span class="badge badge-${cls}"><span class="badge-dot"></span>${labels[status] || status}</span>`;
@@ -462,6 +462,10 @@
           <div class="page-header-sub">${courses.length} kurser i kataloget</div>
         </div>
         <div class="page-header-actions">
+          <button class="btn btn-ghost" id="import-courses-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            Importér CSV
+          </button>
           <button class="btn btn-accent" id="add-course-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Nyt kursus
@@ -491,7 +495,7 @@
           : `<div class="table-wrap">
             <table id="courses-table">
               <thead><tr>
-                <th>Kursus</th><th>Leverandør</th><th>Kategori</th>
+                <th>Kursus</th><th>Kilde</th><th>Leverandør</th><th>Kategori</th>
                 <th>Pris</th><th>Format</th><th>Næste hold</th><th>Rating</th><th>Status</th><th></th>
               </tr></thead>
               <tbody>
@@ -502,10 +506,14 @@
                     ? `<div class="td-title">${fmtDate(c.next_session_date)}</div><div class="td-sub">${upcoming} kommende hold${seats != null && seats <= 4 ? ' · ' + seats + ' pladser på næste' : ''}</div>`
                     : '<div class="td-sub">Mangler datoer</div>';
                   return `
-                  <tr data-search="${escHtml([c.title, c.supplier_name, c.category_label, c.status].join(' ').toLowerCase())}">
+                  <tr data-search="${escHtml([c.title, c.supplier_name, c.category_label, c.status, c.source_handle, c.product_type, c.tags].join(' ').toLowerCase())}">
                     <td>
                       <div class="td-title">${escHtml(c.title)}</div>
                       <div class="td-sub">${escHtml(c.duration||'')}${c.is_online?' · Online':''}</div>
+                    </td>
+                    <td>
+                      <div class="td-title" style="font-size:12.5px">${escHtml(c.source_handle || 'Manuel')}</div>
+                      <div class="td-sub">${escHtml(c.product_type || c.source || '')}</div>
                     </td>
                     <td>
                       <div class="supplier-cell">
@@ -587,7 +595,68 @@
 
     // Add course
     document.getElementById('add-course-btn')?.addEventListener('click', () => openCourseForm(null, suppliers, categories));
+    document.getElementById('import-courses-btn')?.addEventListener('click', openCourseImport);
     document.getElementById('badge-courses').textContent = courses.length;
+  }
+
+  function openCourseImport() {
+    openModal('Importér Shopify CSV', `
+      <div class="form-grid">
+        <div class="form-group form-col-full">
+          <label class="form-label">CSV-fil <span class="req">*</span></label>
+          <input class="form-input" id="import-csv-file" type="file" accept=".csv,text/csv">
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-check">
+            <input type="checkbox" id="import-replace">
+            Erstat hele kataloget
+          </label>
+          <div class="form-hint">Brug kun ved første import. Fremtidige batches bør flettes ind i eksisterende kurser.</div>
+        </div>
+        <div class="form-group form-col-full" id="import-result" hidden></div>
+      </div>`,
+      `<button class="btn btn-ghost" id="cancel-import">Annuller</button>
+       <button class="btn btn-accent" id="run-import">Importér</button>`
+    );
+
+    document.getElementById('cancel-import').onclick = closeModal;
+    document.getElementById('run-import').onclick = async () => {
+      const input = document.getElementById('import-csv-file');
+      const file = input && input.files && input.files[0];
+      if (!file) { toast('Vælg en CSV-fil', 'error'); return; }
+      const btn = document.getElementById('run-import');
+      const resultBox = document.getElementById('import-result');
+      try {
+        btn.disabled = true;
+        btn.textContent = 'Importerer...';
+        const csv = await file.text();
+        const res = await api('/courses/import/shopify-csv', {
+          method: 'POST',
+          body: {
+            csv,
+            file_name: file.name,
+            replace_catalog: document.getElementById('import-replace').checked,
+          },
+        });
+        const s = res.summary || {};
+        resultBox.hidden = false;
+        resultBox.innerHTML = `
+          <div class="import-summary">
+            <div><b>${(s.courses_created || 0).toLocaleString('da-DK')}</b><span>nye kurser</span></div>
+            <div><b>${(s.courses_updated || 0).toLocaleString('da-DK')}</b><span>opdaterede kurser</span></div>
+            <div><b>${(s.sessions_created || 0).toLocaleString('da-DK')}</b><span>nye datoer</span></div>
+            <div><b>${(s.sessions_updated || 0).toLocaleString('da-DK')}</b><span>opdaterede datoer</span></div>
+            <div><b>${(s.expired_sessions || 0).toLocaleString('da-DK')}</b><span>udløbne datoer</span></div>
+          </div>`;
+        toast('CSV importeret');
+        btn.textContent = 'Færdig';
+        setTimeout(() => { closeModal(); renderCourses(); }, 900);
+      } catch (e) {
+        toast(e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Importér';
+      }
+    };
   }
 
   async function openCourseForm(id, suppliers, categories) {
@@ -602,6 +671,8 @@
     const marquee  = Array.isArray(course.marquee_items) ? course.marquee_items : [];
     const phases   = Array.isArray(course.curriculum) ? course.curriculum : [];
     const facts    = Array.isArray(course.facts) ? course.facts : [{k:'Varighed',v:'1 dag',s:''},{k:'Niveau',v:'Alle',s:''},{k:'Format',v:'Fysisk',s:''},{k:'Deltagere',v:'Maks 14',s:''}];
+    const shopifyProductData = course.shopify_product_data && typeof course.shopify_product_data === 'object' ? course.shopify_product_data : {};
+    const shopifyProductPretty = JSON.stringify(shopifyProductData, null, 2);
 
     const supOpts = suppliers.map(s => `<option value="${s.id}" ${s.id==course.supplier_id?'selected':''}>${escHtml(s.name)}</option>`).join('');
     const catOpts = categories.map(c => `<option value="${c.id}" ${c.id==course.category_id?'selected':''}>${escHtml(c.label)}</option>`).join('');
@@ -621,6 +692,7 @@
         <button class="tab-btn active" data-tab="tab-basic">Grundinfo</button>
         <button class="tab-btn" data-tab="tab-content">Indhold</button>
         <button class="tab-btn" data-tab="tab-pricing">Pris & Format</button>
+        <button class="tab-btn" data-tab="tab-supplier-data">Leverandørdata</button>
       </div>
       <div data-tabgroup="course-form">
         <div class="tab-panel active" id="tab-basic">
@@ -744,6 +816,58 @@
             </div>
           </div>
         </div>
+
+        <div class="tab-panel" id="tab-supplier-data">
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label">Kilde</label>
+              <input class="form-input" id="f-source" value="${escHtml(course.source||'manual')}" placeholder="manual">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Shopify handle</label>
+              <input class="form-input" id="f-source-handle" value="${escHtml(course.source_handle||'')}" placeholder="produkt-handle">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Produkttype</label>
+              <input class="form-input" id="f-product-type" value="${escHtml(course.product_type||'')}" placeholder="Kursus">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Publiceret</label>
+              <select class="form-select" id="f-published">
+                <option value="1" ${course.published !== 0 ? 'selected' : ''}>Ja</option>
+                <option value="0" ${course.published === 0 ? 'selected' : ''}>Nej</option>
+              </select>
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Tags</label>
+              <textarea class="form-textarea" id="f-tags" rows="2">${escHtml(course.tags||'')}</textarea>
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Billede URL</label>
+              <input class="form-input" id="f-image-src" value="${escHtml(course.image_src||'')}" placeholder="https://...">
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Billede alt-tekst</label>
+              <input class="form-input" id="f-image-alt" value="${escHtml(course.image_alt_text||'')}" placeholder="Beskriv billedet">
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">SEO title</label>
+              <input class="form-input" id="f-seo-title" value="${escHtml(course.seo_title||'')}">
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">SEO beskrivelse</label>
+              <textarea class="form-textarea" id="f-seo-desc" rows="2">${escHtml(course.seo_description||'')}</textarea>
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Body HTML</label>
+              <textarea class="form-textarea mono-field" id="f-body-html" rows="8">${escHtml(course.body_html||'')}</textarea>
+            </div>
+            <div class="form-group form-col-full">
+              <label class="form-label">Rå Shopify produktdata</label>
+              <pre class="raw-data-box">${escHtml(shopifyProductPretty || '{}')}</pre>
+            </div>
+          </div>
+        </div>
       </div>`,
 
       `<button class="btn btn-ghost" id="cancel-course-form">Annuller</button>
@@ -797,6 +921,16 @@
         price: parseInt(document.getElementById('f-price').value) || 0,
         price_label: document.getElementById('f-price-label').value.trim(),
         price_note: document.getElementById('f-price-note').value.trim(),
+        source: document.getElementById('f-source').value.trim() || 'manual',
+        source_handle: document.getElementById('f-source-handle').value.trim(),
+        product_type: document.getElementById('f-product-type').value.trim(),
+        published: document.getElementById('f-published').value === '1',
+        tags: document.getElementById('f-tags').value.trim(),
+        image_src: document.getElementById('f-image-src').value.trim(),
+        image_alt_text: document.getElementById('f-image-alt').value.trim(),
+        seo_title: document.getElementById('f-seo-title').value.trim(),
+        seo_description: document.getElementById('f-seo-desc').value.trim(),
+        body_html: document.getElementById('f-body-html').value.trim(),
         outcomes: getListValues('outcomes'),
         included: getListValues('included'),
         marquee_items: getListValues('marquee_items'),
@@ -1171,20 +1305,23 @@
                 const isLow = !isFull && remaining <= 4;
                 const seatsClass = (isFull || isLow) ? 'seats-low' : 'seats-ok';
                 const seatsTxt = isFull ? 'Udsolgt' : `${remaining} tilbage`;
-                return `<div class="session-item" data-id="${s.id}">
+                const variantPrice = s.variant_price != null ? ` · ${fmtMoney(s.variant_price)}` : '';
+                const skuText = s.source_variant_sku ? ` · SKU ${escHtml(s.source_variant_sku)}` : '';
+                return `<div class="session-item ${s.is_expired ? 'session-expired' : ''}" data-id="${s.id}">
                   <div class="session-date-badge">
                     <div class="sdb-d">${day}</div>
                     <div class="sdb-m">${mon}</div>
                   </div>
                   <div class="session-info">
                     <div class="session-venue">${escHtml(s.venue||s.location)}</div>
-                    <div class="session-meta">${escHtml(s.location)} · ${escHtml(s.format)} · <b>${booked}/${cap}</b> booket</div>
+                    <div class="session-meta">${escHtml(s.location)} · ${escHtml(s.format)}${variantPrice}${skuText} · <b>${booked}/${cap}</b> booket</div>
+                    ${s.date_text ? `<div class="session-meta">Leverandørdato: ${escHtml(s.date_text)}${s.end_date ? ' · slutter ' + fmtDate(s.end_date) : ''}</div>` : ''}
                   </div>
                   <div class="session-badges">
                     ${s.is_popular ? '<span class="badge badge-active" style="gap:4px">★ Populært</span>' : ''}
                     <span class="seats-indicator ${seatsClass}" title="${booked} booket af ${cap} pladser">${seatsTxt}</span>
                     <button class="btn btn-sm btn-ghost btn-session-bookings" data-id="${s.id}" title="Se bookinger for dette hold">${booked} booket</button>
-                    ${statusBadge(s.status)}
+                    ${s.is_expired ? statusBadge('expired') : statusBadge(s.status)}
                   </div>
                   <div class="session-actions">
                     <button class="btn-icon btn-edit-session" data-id="${s.id}" title="Rediger">
@@ -1241,12 +1378,21 @@
     }
 
     const dateVal = sess.date ? sess.date.slice(0, 10) : '';
+    const endDateVal = sess.end_date ? sess.end_date.slice(0, 10) : '';
 
     openModal(isEdit ? 'Rediger hold' : 'Nyt hold', `
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Dato <span class="req">*</span></label>
           <input class="form-input" id="sess-date" type="date" value="${escHtml(dateVal)}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slutdato</label>
+          <input class="form-input" id="sess-end-date" type="date" value="${escHtml(endDateVal)}">
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-label">Leverandørens datotekst</label>
+          <input class="form-input" id="sess-date-text" value="${escHtml(sess.date_text||'')}" placeholder="f.eks. 8. - 9. oktober">
         </div>
         <div class="form-group">
           <label class="form-label">By / Lokation <span class="req">*</span></label>
@@ -1263,6 +1409,14 @@
         <div class="form-group">
           <label class="form-label">Kapacitet (pladser i alt)</label>
           <input class="form-input" id="sess-seats" type="number" min="0" max="999" value="${sess.seats||14}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Variantpris</label>
+          <input class="form-input" id="sess-variant-price" type="number" min="0" value="${sess.variant_price ?? ''}" placeholder="Samme som kursus">
+        </div>
+        <div class="form-group form-col-full">
+          <label class="form-label">Variant SKU</label>
+          <input class="form-input" id="sess-sku" value="${escHtml(sess.source_variant_sku||'')}" placeholder="Shopify SKU">
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
@@ -1293,10 +1447,15 @@
       if (!date || !location) { toast('Dato og lokation er påkrævet', 'error'); return; }
       const body = {
         course_id: courseId,
-        date, location,
+        date,
+        end_date: document.getElementById('sess-end-date').value,
+        date_text: document.getElementById('sess-date-text').value.trim(),
+        location,
         venue: document.getElementById('sess-venue').value.trim(),
         format: document.getElementById('sess-format').value.trim(),
         seats: parseInt(document.getElementById('sess-seats').value) || 14,
+        variant_price: document.getElementById('sess-variant-price').value,
+        source_variant_sku: document.getElementById('sess-sku').value.trim(),
         is_online: document.getElementById('sess-online').checked,
         is_popular: document.getElementById('sess-popular').checked,
         status: document.getElementById('sess-status').value,

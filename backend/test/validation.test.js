@@ -12,12 +12,12 @@ process.env.ADMIN_TOKEN = 'test-token';
 const test = require('node:test');
 const assert = require('node:assert');
 const app = require('../app');
-const { ADMIN, boot, makeClient, jsonReq } = require('../test-helpers');
+const { ADMIN, boot, makeClient, jsonReq, seedTestCatalog } = require('../test-helpers');
 
 let server, base;
 const j = makeClient(() => base);
 
-test.before(() => { ({ server, base } = boot(app)); });
+test.before(async () => { ({ server, base } = boot(app)); await seedTestCatalog(j); });
 test.after(() => server.close());
 
 /* ---- 4. Malformed JSON ---- */
@@ -55,7 +55,7 @@ test('POST /api/bookings with missing session_id -> 404 "Holdet findes ikke"', a
 
 /* ---- 9. Status enum on PUT ---- */
 test('PUT booking status=done -> 400; valid status ok', async () => {
-  // Seed booking id 1 exists (sample booking). Invalid status -> 400.
+  // Per-file fixture booking id 1 exists. Invalid status -> 400.
   const bad = await j('/api/bookings/1', jsonReq('PUT', { status: 'done' }, true));
   assert.strictEqual(bad.status, 400);
   assert.ok(bad.contentType.includes('application/json'));

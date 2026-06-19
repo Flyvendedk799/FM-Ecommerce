@@ -31,7 +31,7 @@ if (config.ALLOWED_ORIGINS.length) {
   app.use(cors({ origin: config.ALLOWED_ORIGINS }));
 }
 
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '16mb' }));
 
 /* ---- request logging (quiet during tests) ---- */
 if (!config.isTest) {

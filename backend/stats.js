@@ -5,11 +5,12 @@
 const db = require('./db');
 
 async function getStats() {
+  const today = new Date().toISOString().slice(0, 10);
   return {
     total_courses:      (await db.get("SELECT COUNT(*) as n FROM courses WHERE status='active'")).n,
     draft_courses:      (await db.get("SELECT COUNT(*) as n FROM courses WHERE status='draft'")).n,
     total_suppliers:    (await db.get("SELECT COUNT(*) as n FROM suppliers WHERE status='active'")).n,
-    total_sessions:     (await db.get("SELECT COUNT(*) as n FROM sessions WHERE status='active'")).n,
+    total_sessions:     (await db.get("SELECT COUNT(*) as n FROM sessions WHERE status='active' AND date >= ?", today)).n,
     pending_bookings:   (await db.get("SELECT COUNT(*) as n FROM bookings WHERE status='pending'")).n,
     confirmed_bookings: (await db.get("SELECT COUNT(*) as n FROM bookings WHERE status='confirmed'")).n,
     total_bookings:     (await db.get("SELECT COUNT(*) as n FROM bookings")).n,

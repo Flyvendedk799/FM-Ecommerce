@@ -944,6 +944,14 @@ tbody td {
 }
 
 .session-item:hover { border-color: var(--ink); box-shadow: var(--shadow-sm); }
+.session-item.session-expired {
+  background: color-mix(in srgb, var(--paper-2) 70%, #fff);
+  opacity: .78;
+}
+.session-item.session-expired:hover {
+  border-color: var(--line);
+  box-shadow: none;
+}
 
 .session-date-badge {
   display: flex;
@@ -990,6 +998,50 @@ tbody td {
 }
 .seats-low { color: var(--red); }
 .seats-ok  { color: var(--green); }
+
+.import-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.import-summary div {
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.import-summary b {
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.import-summary span {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.raw-data-box,
+.mono-field {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.raw-data-box {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
 
 /* booking → session filter banner */
 .session-filter-banner {

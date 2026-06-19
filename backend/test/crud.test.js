@@ -11,12 +11,12 @@ process.env.ADMIN_TOKEN = 'test-token';
 const test = require('node:test');
 const assert = require('node:assert');
 const app = require('../app');
-const { ADMIN, boot, makeClient, jsonReq } = require('../test-helpers');
+const { ADMIN, boot, makeClient, jsonReq, seedTestCatalog } = require('../test-helpers');
 
 let server, base;
 const j = makeClient(() => base);
 
-test.before(() => { ({ server, base } = boot(app)); });
+test.before(async () => { ({ server, base } = boot(app)); await seedTestCatalog(j); });
 test.after(() => server.close());
 
 /* ---- 13. Course CRUD lifecycle ---- */
@@ -90,7 +90,7 @@ test('course filters: category, status, q', async () => {
   const drafts = await j('/api/courses?status=draft');
   assert.ok(drafts.body.some(c => c.id === draftId), 'draft visible under draft filter');
 
-  // ?q=excel -> matches the seeded "Excel — Avanceret" course (case-insensitive).
+  // ?q=excel -> matches the per-file fixture course (case-insensitive).
   const q = await j('/api/courses?q=excel');
   assert.strictEqual(q.status, 200);
   assert.ok(q.body.length > 0, 'q=excel returns matches');
@@ -113,7 +113,7 @@ test('course list includes upcoming availability metadata', async () => {
   const r = await j('/api/courses?status=active');
   assert.strictEqual(r.status, 200);
   const withDates = r.body.find(c => c.upcoming_session_count > 0);
-  assert.ok(withDates, 'seeded active courses expose upcoming sessions');
+  assert.ok(withDates, 'fixture active courses expose upcoming sessions');
   assert.match(withDates.next_session_date, /^\d{4}-\d{2}-\d{2}$/);
   assert.strictEqual(typeof withDates.upcoming_session_count, 'number');
   assert.strictEqual(typeof withDates.next_session_seats_remaining, 'number');

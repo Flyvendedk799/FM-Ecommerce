@@ -3,18 +3,25 @@ const router = express.Router();
 const db = require('../db');
 const requireAdmin = require('../middleware/requireAdmin');
 const wrapAsync = require('../middleware/wrapAsync');
-const { statusOrDefault, statusStrict, intInRange, numInRange, jsonArray, todayISO } = require('../validate');
+const { importShopifyCsv } = require('../import/shopifyCsv');
+const { httpError, statusOrDefault, statusStrict, intInRange, numInRange, jsonArray, todayISO } = require('../validate');
 
 /* ---- auth: reads are public; writes are admin ---- */
 router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
 
 const JSON_COLS = ['outcomes', 'curriculum', 'included', 'facts', 'marquee_items', 'materials', 'bring_items'];
+const OBJECT_COLS = ['shopify_product_data'];
 
 function parseJSON(row) {
   if (!row) return row;
   JSON_COLS.forEach(col => {
     if (row[col] && typeof row[col] === 'string') {
       try { row[col] = JSON.parse(row[col]); } catch { row[col] = []; }
+    }
+  });
+  OBJECT_COLS.forEach(col => {
+    if (row[col] && typeof row[col] === 'string') {
+      try { row[col] = JSON.parse(row[col]); } catch { row[col] = {}; }
     }
   });
   return row;
@@ -56,17 +63,30 @@ router.get('/', wrapAsync(async (req, res) => {
   if (status)   { sql += ' AND c.status = ?'; params.push(status); }
   if (supplier) { sql += ' AND c.supplier_id = ?'; params.push(supplier); }
   if (q && q.trim()) {
-    // free-text search across title, descriptions, supplier and category
+    // free-text search across title, descriptions, supplier, category and imported metadata
     const like = '%' + q.trim().toLowerCase() + '%';
     sql += ` AND (
       LOWER(c.title) LIKE ? OR LOWER(c.short_description) LIKE ? OR
-      LOWER(c.description) LIKE ? OR LOWER(s.name) LIKE ? OR LOWER(cat.label) LIKE ?
+      LOWER(c.description) LIKE ? OR LOWER(c.source_handle) LIKE ? OR
+      LOWER(c.product_type) LIKE ? OR LOWER(c.tags) LIKE ? OR
+      LOWER(s.name) LIKE ? OR LOWER(cat.label) LIKE ?
     )`;
-    params.push(like, like, like, like, like);
+    params.push(like, like, like, like, like, like, like, like);
   }
   sql += ' ORDER BY c.created_at DESC';
   const rows = (await db.all(sql, ...params)).map(parseJSON);
   res.json(rows);
+}));
+
+router.post('/import/shopify-csv', wrapAsync(async (req, res) => {
+  const csv = typeof req.body.csv === 'string' ? req.body.csv : '';
+  if (!csv.trim()) throw httpError(400, 'CSV-fil mangler');
+  const summary = await importShopifyCsv(db, csv, {
+    fileName: req.body.file_name || req.body.fileName || '',
+    sourceDate: req.body.source_date || req.body.sourceDate || '',
+    replaceCatalog: !!req.body.replace_catalog || !!req.body.replaceCatalog,
+  });
+  res.status(201).json({ ok: true, summary });
 }));
 
 router.get('/:id', wrapAsync(async (req, res) => {
@@ -95,21 +115,30 @@ router.post('/', wrapAsync(async (req, res) => {
     description = '', short_description = '',
     outcomes = [], curriculum = [], included = [], facts = [],
     marquee_items = [], materials = [], bring_items = [],
-    preset_type = 'ledelse', badge = '', color = '#2C1A0A'
+    preset_type = 'ledelse', badge = '', color = '#2C1A0A',
+    source = 'manual', source_handle = '', product_type = '', tags = '',
+    body_html = '', image_src = '', image_alt_text = '', seo_title = '',
+    seo_description = '', shopify_product_data = {}
   } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
   const price        = intInRange(req.body.price, { min: 0, max: 10_000_000, field: 'price', def: 0 });
   const rating       = numInRange(req.body.rating, { min: 0, max: 5, field: 'rating', def: 0 });
   const review_count = intInRange(req.body.review_count, { min: 0, max: 10_000_000, field: 'review_count', def: 0 });
   const status       = statusOrDefault(req.body.status, 'course', 'active');
+  const published    = req.body.published === undefined ? 1 : (req.body.published ? 1 : 0);
   const slug = slugify(title);
   const result = await db.run(`
-    INSERT INTO courses (title, slug, supplier_id, category_id, price, price_label, price_note,
+    INSERT INTO courses (title, slug, source, source_handle, product_type, tags, published,
+      body_html, image_src, image_alt_text, seo_title, seo_description, shopify_product_data,
+      supplier_id, category_id, price, price_label, price_note,
       format, duration, is_online, rating, review_count, description, short_description,
       outcomes, curriculum, included, facts, marquee_items, materials, bring_items,
       preset_type, badge, color, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, title, slug, supplier_id || null, category_id || null, price, price_label, price_note,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, title, slug, source, source_handle, product_type, tags, published,
+    body_html, image_src, image_alt_text, seo_title, seo_description,
+    JSON.stringify(shopify_product_data || {}),
+    supplier_id || null, category_id || null, price, price_label, price_note,
     format, duration, is_online ? 1 : 0, rating, review_count, description, short_description,
     jsonArray(outcomes), jsonArray(curriculum), jsonArray(included),
     jsonArray(facts), jsonArray(marquee_items), jsonArray(materials),
@@ -124,7 +153,9 @@ router.put('/:id', wrapAsync(async (req, res) => {
   const merged = { ...existing };
   const directCols = ['title', 'supplier_id', 'category_id', 'price_label', 'price_note',
     'format', 'duration', 'is_online', 'description', 'short_description',
-    'preset_type', 'badge', 'color'];
+    'preset_type', 'badge', 'color', 'source', 'source_handle', 'product_type',
+    'tags', 'published', 'body_html', 'image_src', 'image_alt_text', 'seo_title',
+    'seo_description'];
   directCols.forEach(col => { if (body[col] !== undefined) merged[col] = body[col]; });
   // validated numerics / status
   if (body.price !== undefined)        merged.price = intInRange(body.price, { min: 0, max: 10_000_000, field: 'price' });
@@ -134,14 +165,22 @@ router.put('/:id', wrapAsync(async (req, res) => {
   JSON_COLS.forEach(col => {
     if (body[col] !== undefined) merged[col] = jsonArray(body[col]);
   });
+  if (body.shopify_product_data !== undefined) {
+    merged.shopify_product_data = JSON.stringify(body.shopify_product_data || {});
+  }
   if (body.title && body.title !== existing.title) merged.slug = slugify(body.title);
   await db.run(`
-    UPDATE courses SET title=?, slug=?, supplier_id=?, category_id=?, price=?, price_label=?,
+    UPDATE courses SET title=?, slug=?, source=?, source_handle=?, product_type=?, tags=?,
+      published=?, body_html=?, image_src=?, image_alt_text=?, seo_title=?,
+      seo_description=?, shopify_product_data=?, supplier_id=?, category_id=?, price=?, price_label=?,
       price_note=?, format=?, duration=?, is_online=?, rating=?, review_count=?, description=?,
       short_description=?, outcomes=?, curriculum=?, included=?, facts=?, marquee_items=?,
       materials=?, bring_items=?, preset_type=?, badge=?, color=?, status=?
     WHERE id=?
-  `, merged.title, merged.slug, merged.supplier_id, merged.category_id, merged.price,
+  `, merged.title, merged.slug, merged.source, merged.source_handle, merged.product_type,
+    merged.tags, merged.published ? 1 : 0, merged.body_html, merged.image_src,
+    merged.image_alt_text, merged.seo_title, merged.seo_description,
+    merged.shopify_product_data, merged.supplier_id, merged.category_id, merged.price,
     merged.price_label, merged.price_note, merged.format, merged.duration,
     merged.is_online ? 1 : 0, merged.rating, merged.review_count, merged.description,
     merged.short_description, merged.outcomes, merged.curriculum, merged.included,

@@ -16,23 +16,7 @@
     salg:    { label: 'Salg & Kundeservice',      accent: '#C9A227', bg: '#2E1A0A', desc: 'Sælg bedre, betjen kunder professionelt og byg stærke relationer.', count: 39 }
   };
 
-  let COURSES = [
-    { id:1,  cat:'ledelse', title:'Forhandlingsteknik',          supplier:'Competence Way',      rating:4.8, reviews:312,  dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#2C1A0A', url:'kursus.html?id=1' },
-    { id:2,  cat:'ledelse', title:'Præsentationsteknik',         supplier:'Waltersdorff Consulting', rating:4.9, reviews:287, dur:'1 dag',           format:'Fysisk',  online:true,  price:6900,  color:'#1F3A2E', url:'kursus.html?id=2' },
-    { id:3,  cat:'ledelse', title:'Konflikthåndtering',          supplier:'Competence Way',      rating:4.7, reviews:198,  dur:'1 dag',           format:'Fysisk',  online:false, price:6500,  color:'#3A2C19', url:'kursus.html?id=3' },
-    { id:4,  cat:'ledelse', title:'Personlig gennemslagskraft',  supplier:'Waltersdorff Consulting', rating:4.8, reviews:241, dur:'2 dage',          format:'Fysisk',  online:true,  price:9900,  color:'#2A1F14', url:'kursus.html?id=4' },
-    { id:5,  cat:'it',      title:'Excel — Avanceret',           supplier:'DataSkolen',          rating:4.8, reviews:445,  dur:'2 dage',          format:'Fysisk',  online:true,  price:8900,  color:'#0D1A38', url:'kursus.html?id=5' },
-    { id:6,  cat:'it',      title:'Power BI Dashboard',          supplier:'DataSkolen',          rating:4.7, reviews:223,  dur:'1 dag',           format:'Online',  online:true,  price:5900,  color:'#1F2E42', url:'kursus.html?id=6' },
-    { id:7,  cat:'it',      title:'Python for Professionals',    supplier:'CodeDanmark',         rating:4.6, reviews:189,  dur:'3 dage',          format:'Fysisk',  online:true,  price:12900, color:'#1A1F35', url:'kursus.html?id=7' },
-    { id:8,  cat:'cert',    title:'PRINCE2® Foundation',         supplier:'PM Academy',          rating:4.9, reviews:521,  dur:'3 dage + eksamen',format:'Fysisk',  online:true,  price:14900, color:'#1E0E3C', url:'kursus.html?id=8', badge:'cert' },
-    { id:9,  cat:'cert',    title:'ITIL® 4 Foundation',          supplier:'PM Academy',          rating:4.8, reviews:412,  dur:'2 dage + eksamen',format:'Fysisk',  online:true,  price:11900, color:'#160A2C', url:'kursus.html?id=9', badge:'cert' },
-    { id:10, cat:'sundhed', title:'Førstehjælp & HLR',           supplier:'Dansk Røde Kors',     rating:4.9, reviews:1240, dur:'1 dag',           format:'Fysisk',  online:false, price:3200,  color:'#0E2A1C', url:'kursus.html?id=10' },
-    { id:11, cat:'sundhed', title:'Psykisk Førstehjælp',         supplier:'Mind Danmark',        rating:4.7, reviews:387,  dur:'1 dag',           format:'Fysisk',  online:true,  price:4500,  color:'#1F2E22', url:'kursus.html?id=11' },
-    { id:12, cat:'amu',     title:'Kloakmester (AMU)',           supplier:'TechErhverv',         rating:4.6, reviews:156,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#2E1208', url:'kursus.html?id=12', badge:'amu' },
-    { id:13, cat:'amu',     title:'Svejsning MIG/MAG (AMU)',     supplier:'TechErhverv',         rating:4.8, reviews:203,  dur:'5 dage',          format:'Fysisk',  online:false, price:0,     color:'#201208', url:'kursus.html?id=13', badge:'amu' },
-    { id:14, cat:'salg',    title:'Salgspsykologi & Indvendinger',supplier:'Competence Way',     rating:4.8, reviews:334,  dur:'1 dag',           format:'Fysisk',  online:true,  price:7200,  color:'#2E1A0A', url:'kursus.html?id=14' },
-    { id:15, cat:'salg',    title:'Telefonist & Kundeservice',   supplier:'ServiceAkademiet',    rating:4.6, reviews:278,  dur:'1 dag',           format:'Fysisk',  online:true,  price:5900,  color:'#261408', url:'kursus.html?id=15' }
-  ];
+  let COURSES = [];
 
   /* ============ STATE ============ */
   let activeCat = null;
@@ -40,6 +24,8 @@
   let activeFormat = 'alle';
   let activeDur = 'alle';
   let activeAvailability = 'alle';
+  let activeSupplier = 'alle';
+  let activeLocation = 'alle';
   let activeSort = 'relevans';
 
   const view = document.getElementById('kat-view');
@@ -79,7 +65,9 @@
     if (!dateStr) return '';
     var d = new Date(dateStr + 'T00:00:00');
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short' });
+    var opts = { day: 'numeric', month: 'short' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    return d.toLocaleDateString('da-DK', opts);
   }
 
   function daysUntil(dateStr) {
@@ -89,6 +77,25 @@
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     return Math.round((d - today) / 86400000);
+  }
+
+  function dateValue(dateStr) {
+    if (!dateStr) return Number.POSITIVE_INFINITY;
+    var d = new Date(dateStr + 'T00:00:00');
+    return Number.isNaN(d.getTime()) ? Number.POSITIVE_INFINITY : d.getTime();
+  }
+
+  function visibleCatKeys() {
+    return Object.keys(CATS).filter(function(k) {
+      return Number(CATS[k].count || 0) > 0 || COURSES.some(function(c) { return c.cat === k; });
+    });
+  }
+
+  function locationSummary(c) {
+    var locations = c.locations || [];
+    if (!locations.length) return '';
+    if (locations.length === 1) return locations[0];
+    return locations.slice(0, 2).join(', ') + (locations.length > 2 ? ' +' + (locations.length - 2) : '');
   }
 
   function availabilityHTML(c) {
@@ -121,20 +128,34 @@
     return '';
   }
 
+  function cardSignalHTML(c) {
+    if (Number(c.rating || 0) > 0) {
+      return '<span class="cc-rating"><span class="cc-star">★</span>' + Number(c.rating).toFixed(1).replace('.', ',') + '</span>';
+    }
+    if (c.upcomingCount > 0) {
+      return '<span class="cc-rating">' + c.upcomingCount + ' dato' + (c.upcomingCount === 1 ? '' : 'er') + '</span>';
+    }
+    return '<span class="cc-rating">Firmahold</span>';
+  }
+
   function courseCard(c) {
     var cat = CATS[c.cat];
     var catLabel = cat ? cat.label.split(' ')[0] : (c.category_label || 'Kursus');
+    var supplierLine = escAttr(c.supplier || 'Kursusudbyder');
+    var loc = locationSummary(c);
+    if (loc) supplierLine += ' · ' + escAttr(loc);
+    if (c.reviews > 0) supplierLine += ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.';
     return '<a class="cc-card reveal" href="' + escAttr(c.url) + '">' +
       '<div class="cc-top" style="background:' + safeColor(c.color) + '">' +
         '<div class="cc-cat-row">' +
           '<span class="cc-cat">' + escAttr(catLabel) + '</span>' +
-          '<span class="cc-rating"><span class="cc-star">★</span>' + c.rating + '</span>' +
+          cardSignalHTML(c) +
         '</div>' +
         '<div class="cc-badges">' + badgeHTML(c) + '</div>' +
       '</div>' +
       '<div class="cc-body">' +
         '<h3 class="cc-title">' + escAttr(c.title) + '</h3>' +
-        '<div class="cc-supplier">' + escAttr(c.supplier) + ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.</div>' +
+        '<div class="cc-supplier">' + supplierLine + '</div>' +
         '<div class="cc-meta">' + formatChip(c) + '</div>' +
         availabilityHTML(c) +
         '<div class="cc-foot">' + priceHTML(c) + '<span class="cc-cta">Se kursus →</span></div>' +
@@ -144,7 +165,7 @@
 
   /* ============ OVERVIEW ============ */
   function renderOverview() {
-    var catKeys = Object.keys(CATS);
+    var catKeys = visibleCatKeys();
     var suppliersSeen = {};
     COURSES.forEach(function(c) { if (c.supplier) suppliersSeen[c.supplier] = true; });
     var supplierCount = Object.keys(suppliersSeen).length;
@@ -180,14 +201,14 @@
           '<span class="eyebrow" style="color:rgba(237,230,214,.5)">Udforsk katalog</span>' +
           '<h1 class="kat-h1">Hvad vil du <span class="ital">lære?</span></h1>' +
           '<div class="kat-search">' +
-            '<input type="text" id="kat-search-input" placeholder="Søg blandt 800+ kurser..." aria-label="Søg">' +
+            '<input type="text" id="kat-search-input" placeholder="Søg blandt ' + COURSES.length.toLocaleString('da-DK') + ' kurser..." aria-label="Søg">' +
             '<button type="button">Søg</button>' +
           '</div>' +
           '<div class="kat-quick" aria-label="Populære søgninger">' +
             '<a href="#q=excel">Excel</a>' +
-            '<a href="#q=amu">AMU</a>' +
+            '<a href="#q=projektledelse">Projektledelse</a>' +
             '<a href="#q=certificering">Certificering</a>' +
-            '<a href="#q=førstehjælp">Førstehjælp</a>' +
+            '<a href="#q=kommunikation">Kommunikation</a>' +
           '</div>' +
           '<div class="kat-total">' + COURSES.length + ' kurser fra ' + supplierCount + ' udbydere</div>' +
         '</div>' +
@@ -219,12 +240,133 @@
   }
 
   /* ============ FILTERING (shared by category + search views) ============ */
+  function currentBaseList() {
+    return (activeQuery != null)
+      ? COURSES.filter(function(c){ return courseMatches(c, activeQuery); })
+      : COURSES.filter(function(c){ return c.cat === activeCat; });
+  }
+
+  function uniqueSorted(list) {
+    var seen = {};
+    list.forEach(function(v) {
+      if (v) seen[v] = true;
+    });
+    return Object.keys(seen).sort(function(a, b) { return a.localeCompare(b, 'da'); });
+  }
+
+  function optionHTML(value, label, selectedValue) {
+    return '<option value="' + escAttr(value) + '"' + (value === selectedValue ? ' selected' : '') + '>' + escAttr(label) + '</option>';
+  }
+
+  function filterBarHTML() {
+    var base = currentBaseList();
+    var suppliers = uniqueSorted(base.map(function(c) { return c.supplier; }));
+    var locations = uniqueSorted(base.reduce(function(acc, c) {
+      return acc.concat(c.locations || []);
+    }, []));
+    var supplierOptions = optionHTML('alle', 'Alle udbydere', activeSupplier) +
+      suppliers.map(function(v) { return optionHTML(v, v, activeSupplier); }).join('');
+    var locationOptions = optionHTML('alle', 'Alle byer', activeLocation) +
+      locations.map(function(v) { return optionHTML(v, v, activeLocation); }).join('');
+
+    return '<div class="filter-bar" id="filter-bar">' +
+      '<div class="filter-inner">' +
+        '<span class="filter-label">Format</span>' +
+        '<div class="filter-group">' +
+          '<button class="f-chip' + (activeFormat==='alle'?' active':'') + '" data-filter="format" data-val="alle">Alle</button>' +
+          '<button class="f-chip' + (activeFormat==='fysisk'?' active':'') + '" data-filter="format" data-val="fysisk">Fysisk</button>' +
+          '<button class="f-chip' + (activeFormat==='online'?' active':'') + '" data-filter="format" data-val="online">Online</button>' +
+        '</div>' +
+        '<div class="filter-sep"></div>' +
+        '<span class="filter-label">Varighed</span>' +
+        '<div class="filter-group">' +
+          '<button class="f-chip' + (activeDur==='alle'?' active':'') + '" data-filter="dur" data-val="alle">Alle</button>' +
+          '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
+          '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
+        '</div>' +
+        '<div class="filter-sep"></div>' +
+        '<span class="filter-label">Dato</span>' +
+        '<div class="filter-group">' +
+          '<button class="f-chip' + (activeAvailability==='alle'?' active':'') + '" data-filter="availability" data-val="alle">Alle</button>' +
+          '<button class="f-chip' + (activeAvailability==='datoer'?' active':'') + '" data-filter="availability" data-val="datoer">Med datoer</button>' +
+          '<button class="f-chip' + (activeAvailability==='snart'?' active':'') + '" data-filter="availability" data-val="snart">Snart</button>' +
+        '</div>' +
+        '<div class="filter-field">' +
+          '<label for="supplier-sel">Udbyder</label>' +
+          '<select id="supplier-sel">' + supplierOptions + '</select>' +
+        '</div>' +
+        '<div class="filter-field">' +
+          '<label for="location-sel">By</label>' +
+          '<select id="location-sel">' + locationOptions + '</select>' +
+        '</div>' +
+        '<div class="filter-sort">' +
+          'Sorter: <select id="sort-sel">' +
+            '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
+            '<option value="dato"' + (activeSort==='dato'?' selected':'') + '>Næste dato</option>' +
+            '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Popularitet</option>' +
+            '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
+            '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function resetFilters() {
+    activeFormat = 'alle';
+    activeDur = 'alle';
+    activeAvailability = 'alle';
+    activeSupplier = 'alle';
+    activeLocation = 'alle';
+    activeSort = 'relevans';
+  }
+
+  function bindFilterControls(renderCurrentView) {
+    view.querySelectorAll('.f-chip').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var filter = btn.getAttribute('data-filter');
+        var val = btn.getAttribute('data-val');
+        if (filter === 'format') activeFormat = val;
+        if (filter === 'dur') activeDur = val;
+        if (filter === 'availability') activeAvailability = val;
+        view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        renderCourseGrid();
+      });
+    });
+
+    var supplierSel = document.getElementById('supplier-sel');
+    if (supplierSel) supplierSel.addEventListener('change', function() {
+      activeSupplier = supplierSel.value;
+      renderCourseGrid();
+    });
+    var locationSel = document.getElementById('location-sel');
+    if (locationSel) locationSel.addEventListener('change', function() {
+      activeLocation = locationSel.value;
+      renderCourseGrid();
+    });
+
+    var clear = document.getElementById('clear-filters');
+    if (clear) clear.addEventListener('click', function() {
+      resetFilters();
+      renderCurrentView();
+    });
+
+    var sortSel = document.getElementById('sort-sel');
+    if (sortSel) sortSel.addEventListener('change', function() {
+      activeSort = sortSel.value;
+      renderCourseGrid();
+    });
+  }
+
   function applyFilters(list) {
     return list.filter(function(c) {
       if (activeFormat === 'online' && !c.online) return false;
       if (activeFormat === 'fysisk' && c.online && c.format === 'Online') return false;
       if (activeDur === '1dag' && c.dur !== '1 dag') return false;
       if (activeDur === 'multi' && (c.dur === '1 dag')) return false;
+      if (activeSupplier !== 'alle' && c.supplier !== activeSupplier) return false;
+      if (activeLocation !== 'alle' && (c.locations || []).indexOf(activeLocation) < 0) return false;
       if (activeAvailability === 'datoer' && !c.upcomingCount) return false;
       if (activeAvailability === 'snart') {
         var until = daysUntil(c.nextDate);
@@ -232,16 +374,15 @@
       }
       return true;
     }).sort(function(a,b) {
-      if (activeSort === 'rating') return b.rating - a.rating;
+      if (activeSort === 'rating') return (b.rating - a.rating) || (b.upcomingCount - a.upcomingCount) || (dateValue(a.nextDate) - dateValue(b.nextDate)) || a.title.localeCompare(b.title, 'da');
       if (activeSort === 'pris-asc') return a.price - b.price;
       if (activeSort === 'pris-desc') return b.price - a.price;
       if (activeSort === 'dato') {
-        if (!a.nextDate && !b.nextDate) return 0;
-        if (!a.nextDate) return 1;
-        if (!b.nextDate) return -1;
-        return a.nextDate.localeCompare(b.nextDate);
+        return (dateValue(a.nextDate) - dateValue(b.nextDate)) || a.title.localeCompare(b.title, 'da');
       }
-      return 0; // relevans = original order
+      return (Number(Boolean(b.upcomingCount)) - Number(Boolean(a.upcomingCount))) ||
+        (dateValue(a.nextDate) - dateValue(b.nextDate)) ||
+        a.title.localeCompare(b.title, 'da');
     });
   }
 
@@ -249,6 +390,11 @@
     var hay = [
       c.title || '',
       c.supplier || '',
+      c.sourceHandle || '',
+      c.productType || '',
+      c.tags || '',
+      (c.locations || []).join(' '),
+      (c.dateTerms || []).join(' '),
       (CATS[c.cat] ? CATS[c.cat].label : ''),
       c.format || '',
       c.dur || '',
@@ -262,10 +408,7 @@
 
   // Result set for the current view — category mode or search mode.
   function getResults() {
-    var base = (activeQuery != null)
-      ? COURSES.filter(function(c){ return courseMatches(c, activeQuery); })
-      : COURSES.filter(function(c){ return c.cat === activeCat; });
-    return applyFilters(base);
+    return applyFilters(currentBaseList());
   }
 
   function renderCourseGrid() {
@@ -280,7 +423,8 @@
     var clear = document.getElementById('clear-filters');
     if (clear) {
       clear.hidden = activeFormat === 'alle' && activeDur === 'alle' &&
-        activeAvailability === 'alle' && activeSort === 'relevans';
+        activeAvailability === 'alle' && activeSupplier === 'alle' &&
+        activeLocation === 'alle' && activeSort === 'relevans';
     }
     if (courses.length === 0) {
       grid.innerHTML = activeQuery != null
@@ -309,7 +453,7 @@
     activeQuery = null;
 
     // sidebar nav items
-    var sidebarItems = Object.keys(CATS).map(function(k) {
+    var sidebarItems = visibleCatKeys().map(function(k) {
       return '<button class="sidebar-cat' + (k===catKey?' active':'') + '" data-cat="' + escAttr(k) + '" style="' + (k===catKey?'background:var(--ink);color:var(--paper);':'') + '">' +
         '<span class="sidebar-dot" style="background:' + safeColor(CATS[k].accent) + '"></span>' + escAttr(CATS[k].label) +
       '</button>';
@@ -329,40 +473,7 @@
           '<div class="cat-view-meta"><span class="cat-view-count">' + cat.count + ' kurser tilgængelige</span></div>' +
         '</div>' +
       '</section>' +
-
-      '<div class="filter-bar" id="filter-bar">' +
-        '<div class="filter-inner">' +
-          '<span class="filter-label">Format</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeFormat==='alle'?' active':'') + '" data-filter="format" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeFormat==='fysisk'?' active':'') + '" data-filter="format" data-val="fysisk">Fysisk</button>' +
-            '<button class="f-chip' + (activeFormat==='online'?' active':'') + '" data-filter="format" data-val="online">Online</button>' +
-          '</div>' +
-          '<div class="filter-sep"></div>' +
-          '<span class="filter-label">Varighed</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeDur==='alle'?' active':'') + '" data-filter="dur" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
-            '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
-          '</div>' +
-          '<div class="filter-sep"></div>' +
-          '<span class="filter-label">Dato</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeAvailability==='alle'?' active':'') + '" data-filter="availability" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeAvailability==='datoer'?' active':'') + '" data-filter="availability" data-val="datoer">Med datoer</button>' +
-            '<button class="f-chip' + (activeAvailability==='snart'?' active':'') + '" data-filter="availability" data-val="snart">Snart</button>' +
-          '</div>' +
-          '<div class="filter-sort">' +
-            'Sorter: <select id="sort-sel">' +
-              '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
-              '<option value="dato"' + (activeSort==='dato'?' selected':'') + '>Næste dato</option>' +
-              '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Rating</option>' +
-              '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
-              '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
-            '</select>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
+      filterBarHTML() +
 
       '<div class="wrap">' +
         '<div class="cat-layout">' +
@@ -380,32 +491,7 @@
     var back = document.getElementById('back-link');
     if (back) back.addEventListener('click', function(e) { e.preventDefault(); window.location.hash = ''; });
 
-    // filter chips
-    view.querySelectorAll('.f-chip').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var filter = btn.getAttribute('data-filter');
-        var val = btn.getAttribute('data-val');
-        if (filter === 'format') activeFormat = val;
-        if (filter === 'dur') activeDur = val;
-        if (filter === 'availability') activeAvailability = val;
-        view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
-        btn.classList.add('active');
-        renderCourseGrid();
-      });
-    });
-
-    var clear = document.getElementById('clear-filters');
-    if (clear) clear.addEventListener('click', function() {
-      activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
-      renderCategory(catKey);
-    });
-
-    // sort
-    var sortSel = document.getElementById('sort-sel');
-    if (sortSel) sortSel.addEventListener('change', function() {
-      activeSort = sortSel.value;
-      renderCourseGrid();
-    });
+    bindFilterControls(function(){ renderCategory(catKey); });
 
     // sidebar nav
     view.querySelectorAll('.sidebar-cat').forEach(function(btn) {
@@ -434,7 +520,7 @@
     var matchCount = COURSES.filter(function(c){ return courseMatches(c, q); }).length;
 
     // sidebar lets users jump into a category to refine
-    var sidebarItems = Object.keys(CATS).map(function(k) {
+    var sidebarItems = visibleCatKeys().map(function(k) {
       return '<button class="sidebar-cat" data-cat="' + escAttr(k) + '">' +
         '<span class="sidebar-dot" style="background:' + safeColor(CATS[k].accent) + '"></span>' + escAttr(CATS[k].label) +
       '</button>';
@@ -456,40 +542,7 @@
           '</div>' +
         '</div>' +
       '</section>' +
-
-      '<div class="filter-bar" id="filter-bar">' +
-        '<div class="filter-inner">' +
-          '<span class="filter-label">Format</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeFormat==='alle'?' active':'') + '" data-filter="format" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeFormat==='fysisk'?' active':'') + '" data-filter="format" data-val="fysisk">Fysisk</button>' +
-            '<button class="f-chip' + (activeFormat==='online'?' active':'') + '" data-filter="format" data-val="online">Online</button>' +
-          '</div>' +
-          '<div class="filter-sep"></div>' +
-          '<span class="filter-label">Varighed</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeDur==='alle'?' active':'') + '" data-filter="dur" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeDur==='1dag'?' active':'') + '" data-filter="dur" data-val="1dag">1 dag</button>' +
-            '<button class="f-chip' + (activeDur==='multi'?' active':'') + '" data-filter="dur" data-val="multi">2+ dage</button>' +
-          '</div>' +
-          '<div class="filter-sep"></div>' +
-          '<span class="filter-label">Dato</span>' +
-          '<div class="filter-group">' +
-            '<button class="f-chip' + (activeAvailability==='alle'?' active':'') + '" data-filter="availability" data-val="alle">Alle</button>' +
-            '<button class="f-chip' + (activeAvailability==='datoer'?' active':'') + '" data-filter="availability" data-val="datoer">Med datoer</button>' +
-            '<button class="f-chip' + (activeAvailability==='snart'?' active':'') + '" data-filter="availability" data-val="snart">Snart</button>' +
-          '</div>' +
-          '<div class="filter-sort">' +
-            'Sorter: <select id="sort-sel">' +
-              '<option value="relevans"' + (activeSort==='relevans'?' selected':'') + '>Relevans</option>' +
-              '<option value="dato"' + (activeSort==='dato'?' selected':'') + '>Næste dato</option>' +
-              '<option value="rating"' + (activeSort==='rating'?' selected':'') + '>Rating</option>' +
-              '<option value="pris-asc"' + (activeSort==='pris-asc'?' selected':'') + '>Pris ↑</option>' +
-              '<option value="pris-desc"' + (activeSort==='pris-desc'?' selected':'') + '>Pris ↓</option>' +
-            '</select>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
+      filterBarHTML() +
 
       '<div class="wrap">' +
         '<div class="cat-layout">' +
@@ -518,32 +571,7 @@
     var sinput = document.getElementById('kat-search-input');
     if (sinput) sinput.addEventListener('keydown', function(e){ if (e.key === 'Enter') submitSearch(); });
 
-    // filter chips
-    view.querySelectorAll('.f-chip').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var filter = btn.getAttribute('data-filter');
-        var val = btn.getAttribute('data-val');
-        if (filter === 'format') activeFormat = val;
-        if (filter === 'dur') activeDur = val;
-        if (filter === 'availability') activeAvailability = val;
-        view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
-        btn.classList.add('active');
-        renderCourseGrid();
-      });
-    });
-
-    var clear = document.getElementById('clear-filters');
-    if (clear) clear.addEventListener('click', function() {
-      activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
-      renderSearch(q);
-    });
-
-    // sort
-    var sortSel = document.getElementById('sort-sel');
-    if (sortSel) sortSel.addEventListener('change', function() {
-      activeSort = sortSel.value;
-      renderCourseGrid();
-    });
+    bindFilterControls(function(){ renderSearch(q); });
 
     // sidebar → jump into a category
     view.querySelectorAll('.sidebar-cat').forEach(function(btn) {
@@ -556,7 +584,7 @@
   /* ============ ROUTING ============ */
   function route() {
     var hash = window.location.hash.slice(1);
-    activeFormat = 'alle'; activeDur = 'alle'; activeAvailability = 'alle'; activeSort = 'relevans';
+    resetFilters();
     if (hash.indexOf('q=') === 0) {
       var q = decodeURIComponent(hash.slice(2));
       if (q.trim()) renderSearch(q.trim());
@@ -564,19 +592,50 @@
       window.scrollTo({ top: 0, behavior: 'auto' });
       return;
     }
-    if (hash && CATS[hash]) renderCategory(hash);
+    if (hash && CATS[hash] && visibleCatKeys().indexOf(hash) >= 0) renderCategory(hash);
     else renderOverview();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   /* ============ INIT — fetch live data from API ============ */
+  function todayISO() {
+    var d = new Date();
+    d.setHours(0, 0, 0, 0);
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  function buildSessionLookup(sessions) {
+    var today = todayISO();
+    var lookup = {};
+    (sessions || []).forEach(function(s) {
+      if (s.status !== 'active' || s.is_expired || (s.date && s.date < today)) return;
+      var id = Number(s.course_id);
+      if (!id) return;
+      if (!lookup[id]) lookup[id] = { locations: {}, dateTerms: [] };
+      var loc = s.location || (s.is_online ? 'Online' : '');
+      if (loc) lookup[id].locations[loc] = true;
+      if (s.date_text) lookup[id].dateTerms.push(s.date_text);
+      if (s.venue) lookup[id].dateTerms.push(s.venue);
+      if (s.format) lookup[id].dateTerms.push(s.format);
+    });
+    Object.keys(lookup).forEach(function(id) {
+      lookup[id].locations = Object.keys(lookup[id].locations).sort(function(a, b) { return a.localeCompare(b, 'da'); });
+    });
+    return lookup;
+  }
+
   function init() {
     Promise.all([
       fetch('/api/categories').then(function(r) { return r.ok ? r.json() : null; }),
-      fetch('/api/courses?status=active').then(function(r) { return r.ok ? r.json() : null; })
+      fetch('/api/courses?status=active').then(function(r) { return r.ok ? r.json() : null; }),
+      fetch('/api/sessions').then(function(r) { return r.ok ? r.json() : null; })
     ]).then(function(results) {
       var catsArr   = results[0];
       var coursesArr = results[1];
+      var sessionsArr = results[2];
+      var sessionsByCourse = buildSessionLookup(sessionsArr);
 
       if (catsArr && catsArr.length) {
         CATS = {};
@@ -591,7 +650,7 @@
         });
       }
 
-      if (coursesArr && coursesArr.length) {
+      if (coursesArr) {
         COURSES = coursesArr.map(function(c) {
           return {
             id:       c.id,
@@ -606,7 +665,12 @@
             price:    c.price || 0,
             color:    c.color || '#2C1A0A',
             badge:    c.badge || null,
+            sourceHandle: c.source_handle || '',
+            productType: c.product_type || '',
+            tags:     c.tags || '',
             nextDate: c.next_session_date || '',
+            locations: (sessionsByCourse[c.id] && sessionsByCourse[c.id].locations) || [],
+            dateTerms: (sessionsByCourse[c.id] && sessionsByCourse[c.id].dateTerms) || [],
             upcomingCount: Number(c.upcoming_session_count || 0),
             nextSeatsRemaining: c.next_session_seats_remaining == null ? null : Number(c.next_session_seats_remaining),
             minSeatsRemaining: c.min_seats_remaining == null ? null : Number(c.min_seats_remaining),

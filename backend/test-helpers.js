@@ -39,4 +39,43 @@ function jsonReq(method, payload, withAdmin = false) {
   return { method, headers, body: JSON.stringify(payload) };
 }
 
-module.exports = { TOKEN, ADMIN, boot, makeClient, jsonReq };
+async function seedTestCatalog(j) {
+  const cats = await j('/api/categories');
+  const itCat = Array.isArray(cats.body) ? cats.body.find(c => c.key === 'it') : null;
+  const supplier = await j('/api/suppliers', jsonReq('POST', {
+    name: 'Test Supplier',
+    abbr: 'TS',
+    status: 'active',
+  }, true));
+  const course = await j('/api/courses', jsonReq('POST', {
+    title: 'Excel Fixture Course',
+    supplier_id: supplier.body.id,
+    category_id: itCat ? itCat.id : null,
+    price: 6900,
+    format: 'Fysisk',
+    duration: '1 dag',
+    short_description: 'Fixture course for automated tests',
+    status: 'active',
+  }, true));
+  const session = await j('/api/sessions', jsonReq('POST', {
+    course_id: course.body.id,
+    date: '2030-01-15',
+    location: 'København',
+    venue: 'Fixture venue',
+    seats: 12,
+  }, true));
+  const booking = await j('/api/bookings', jsonReq('POST', {
+    session_id: session.body.id,
+    customer_name: 'Fixture Booker',
+    customer_email: 'fixture@example.com',
+    participants: 1,
+  }));
+  return {
+    supplierId: supplier.body.id,
+    courseId: course.body.id,
+    sessionId: session.body.id,
+    bookingId: booking.body.id,
+  };
+}
+
+module.exports = { TOKEN, ADMIN, boot, makeClient, jsonReq, seedTestCatalog };

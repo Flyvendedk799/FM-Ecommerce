@@ -168,33 +168,127 @@
     });
   });
 
-  /* ---- live featured courses (top-rated from the catalog) ---- */
+  /* ---- hero search ---- */
+  (function bindHeroSearch() {
+    const form = document.getElementById('lp-search');
+    const input = document.getElementById('lp-search-input');
+    if (!form || !input) return;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const q = input.value.trim();
+      window.location.href = q ? 'Kategorier.html#q=' + encodeURIComponent(q) : 'Kategorier.html';
+    });
+  })();
+
+  /* ---- live catalog facts + featured courses ---- */
+  const coursesPromise = fetch('/api/courses?status=active')
+    .then(r => r.ok ? r.json() : null)
+    .catch(() => null);
+  const categoriesPromise = fetch('/api/categories')
+    .then(r => r.ok ? r.json() : null)
+    .catch(() => null);
+
+  function fmtInt(n) {
+    return Number(n || 0).toLocaleString('da-DK');
+  }
+
+  function setTextAll(selector, value) {
+    document.querySelectorAll(selector).forEach(el => { el.textContent = value; });
+  }
+
+  function setStatTarget(key, value) {
+    const el = document.querySelector('.stat-num[data-stat="' + key + '"]');
+    if (!el) return;
+    const safeValue = Math.max(0, Number(value || 0));
+    el.setAttribute('data-target', String(safeValue));
+    if (counted) el.textContent = fmtInt(safeValue);
+  }
+
+  Promise.all([coursesPromise, categoriesPromise]).then(([courses, cats]) => {
+    courses = Array.isArray(courses) ? courses : [];
+    cats = Array.isArray(cats) ? cats : [];
+    if (!courses.length && !cats.length) return;
+
+    const supplierCount = new Set(courses.map(c => c.supplier_name).filter(Boolean)).size;
+    const upcomingCount = courses.reduce((sum, c) => sum + Number(c.upcoming_session_count || 0), 0);
+    const activeCategoryCount = cats.filter(c => Number(c.course_count || 0) > 0).length || cats.length;
+
+    setStatTarget('courses', courses.length);
+    setStatTarget('suppliers', supplierCount);
+    setStatTarget('sessions', upcomingCount);
+    setStatTarget('categories', activeCategoryCount);
+    setTextAll('[data-hero-course-count]', fmtInt(courses.length));
+    setTextAll('[data-lp-course-count]', fmtInt(courses.length));
+    setTextAll('[data-lp-session-count]', fmtInt(upcomingCount));
+    setTextAll('[data-lp-supplier-count]', fmtInt(supplierCount));
+  });
+
+  (function loadCategoryCounts() {
+    categoriesPromise
+      .then(cats => {
+        if (!cats || !cats.length) return;
+        cats.forEach(cat => {
+          const card = document.querySelector('.cat-card[href="Kategorier.html#' + cat.key + '"]');
+          const count = card && card.querySelector('.cat-count');
+          const n = Number(cat.course_count || 0);
+          if (count) count.textContent = n ? n.toLocaleString('da-DK') + ' kurser' : 'Afventer batch';
+          if (card) {
+            card.classList.toggle('is-empty', !n);
+            if (!n) {
+              card.setAttribute('aria-disabled', 'true');
+              card.addEventListener('click', e => e.preventDefault());
+            }
+          }
+        });
+      })
+      .catch(() => { /* static counts remain */ });
+  })();
+
   (function loadFeatured() {
     const grid = document.querySelector('.featured-grid');
     if (!grid) return;
     const esc = s => String(s == null ? '' : s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const safeColor = v => /^#[0-9a-fA-F]{3,8}$/.test(String(v || '')) ? v : '#2C1A0A';
+    const dateValue = v => v ? new Date(v + 'T00:00:00').getTime() : Number.POSITIVE_INFINITY;
+    const fmtDate = v => {
+      const d = new Date(v + 'T00:00:00');
+      if (Number.isNaN(d.getTime())) return '';
+      const opts = { day: 'numeric', month: 'short' };
+      if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+      return d.toLocaleDateString('da-DK', opts);
+    };
 
-    fetch('/api/courses?status=active')
-      .then(r => r.ok ? r.json() : null)
+    coursesPromise
       .then(courses => {
-        if (!courses || !courses.length) return; // keep static fallback cards
+        if (!courses || !courses.length) {
+          grid.innerHTML = '<div class="no-featured">Ingen udvalgte kurser endnu</div>';
+          return;
+        }
         const featured = courses.slice()
-          .sort((a, b) => (b.rating - a.rating) || ((b.review_count || 0) - (a.review_count || 0)))
+          .sort((a, b) => {
+            const dated = Number(Boolean(b.upcoming_session_count)) - Number(Boolean(a.upcoming_session_count));
+            if (dated) return dated;
+            const byDate = dateValue(a.next_session_date) - dateValue(b.next_session_date);
+            if (byDate) return byDate;
+            return String(a.title || '').localeCompare(String(b.title || ''), 'da');
+          })
           .slice(0, 4);
 
         grid.innerHTML = featured.map((c, i) => {
           const shortCat = (c.category_label || '').split(' ')[0] || 'Kursus';
-          const rating = c.rating ? (+c.rating).toFixed(1).replace('.', ',') : '—';
+          const upcomingCount = Number(c.upcoming_session_count || 0);
+          const dateLabel = c.next_session_date
+            ? 'Næste ' + fmtDate(c.next_session_date)
+            : (upcomingCount ? upcomingCount + ' datoer' : 'Firmahold');
           const price = c.price
             ? 'kr. ' + (+c.price).toLocaleString('da-DK') + '<small> ekskl. moms</small>'
-            : '<span style="color:var(--accent)">Gratis*</span>';
+            : '<span style="color:var(--accent)">Pris på forespørgsel</span>';
           const d = i ? ' reveal-d' + i : '';
           return '<a class="rc-card reveal' + d + '" href="kursus.html?id=' + (+c.id) + '">' +
             '<div class="rc-top" style="background:' + safeColor(c.color) + '">' +
               '<span class="rc-cat">' + esc(shortCat) + '</span>' +
-              '<span class="rc-rating"><span class="rc-star">★</span>' + rating + '</span>' +
+              '<span class="rc-rating">' + esc(dateLabel) + '</span>' +
               '<span class="rc-go">→</span>' +
             '</div>' +
             '<div class="rc-body">' +

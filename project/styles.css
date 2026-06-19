@@ -323,6 +323,12 @@ textarea:focus-visible,
   background: var(--paper-3);
 }
 .hero-media image-slot { width: 100%; height: 100%; display: block; }
+.hero-course-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
 .hero-media-tag {
   position: absolute; left: 16px; bottom: 16px; z-index: 3;
   display: flex; gap: 8px;
@@ -419,6 +425,42 @@ section { position: relative; }
 .section-head h2 { font-size: clamp(2.2rem, 4.6vw, 3.8rem); max-width: 16ch; }
 .section-head .lead { color: var(--muted); max-width: 38ch; font-size: 1.05rem; }
 @media (max-width: 760px) { .section-head { flex-direction: column; align-items: flex-start; gap: 16px; } }
+
+.supplier-description {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.supplier-rich-content {
+  max-width: 82ch;
+  color: var(--ink);
+  font-size: 1rem;
+  line-height: 1.78;
+}
+
+.supplier-rich-content h1,
+.supplier-rich-content h2,
+.supplier-rich-content h3 {
+  margin: 30px 0 10px;
+  font-family: var(--serif);
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.supplier-rich-content h3 { font-size: clamp(1.6rem, 2.6vw, 2.2rem); }
+.supplier-rich-content p { margin: 0 0 16px; }
+.supplier-rich-content ul,
+.supplier-rich-content ol {
+  margin: 14px 0 22px;
+  padding-left: 22px;
+}
+
+.supplier-rich-content li { margin: 8px 0; }
+.supplier-rich-content strong { font-weight: 750; }
+.supplier-rich-content em { color: var(--muted); }
+.supplier-rich-content a { color: var(--accent-deep); text-decoration: underline; text-underline-offset: 3px; }
 
 /* ============================================================
    OUTCOMES ("Det får du ud af kurset")

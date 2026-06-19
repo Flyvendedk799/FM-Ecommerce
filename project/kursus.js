@@ -24,6 +24,12 @@
 
   /* ---- Helpers ---- */
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function safeRichHtml(html) {
+    return String(html || '')
+      .replace(/<\s*(script|style|iframe|object|embed)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
+      .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, ' $1="#"');
+  }
   function safeColor(v){ return /^#[0-9a-fA-F]{3,8}$/.test(String(v||'')) ? v : '#2C1A0A'; }
 
   function fmtDateFull(dateStr) {
@@ -37,6 +43,11 @@
   function fmtPrice(price, badge) {
     if (badge === 'amu' || price === 0) return 'Gratis*';
     return 'kr. ' + (+price).toLocaleString('da-DK') + ',-';
+  }
+
+  function priceMarkup(price, badge) {
+    if (badge === 'amu' || Number(price || 0) === 0) return 'Gratis*';
+    return (+price).toLocaleString('da-DK') + '<small> kr.</small>';
   }
 
   function todayISO() {
@@ -154,7 +165,7 @@
     // users understand there were dates, but they cannot be selected.
     const byLoc = {};
     const today = todayISO();
-    (sessions || []).filter(s => s.status === 'active' && (!s.date || s.date >= today)).forEach(s => {
+    (sessions || []).filter(s => s.status === 'active' && !s.is_expired && (!s.date || s.date >= today)).forEach(s => {
       const key = s.is_online ? 'online' : s.location;
       if (!byLoc[key]) byLoc[key] = [];
       byLoc[key].push(s);
@@ -277,7 +288,9 @@
 
     <aside class="hero-aside reveal reveal-d2 is-in">
       <div class="hero-media" data-parallax>
-        <image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>
+        ${course.image_src
+          ? `<img class="hero-course-img" src="${esc(course.image_src)}" alt="${esc(course.image_alt_text || course.title)}" loading="eager">`
+          : '<image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>'}
         <div class="hero-media-tag">
           <span class="chip accent"><span class="dot" style="background:var(--on-accent)"></span>${esc(course.duration || '1 dag')}</span>
         </div>
@@ -369,6 +382,21 @@ ${course.rating && course.review_count ? `
     </div>
     <blockquote class="proof-quote"><span class="qm">"</span>Utrolig relevant og godt struktureret kursus. Brugte teknikkerne allerede ugen efter — og det virkede.<span class="qm">"</span></blockquote>
     <div class="proof-author"><b>Tidligere kursist</b>via Futurematch</div>
+  </div>
+</section>` : ''}
+
+<!-- ============ SUPPLIER DESCRIPTION ============ -->
+${course.body_html ? `
+<section class="section-pad wrap" id="beskrivelse">
+  <div class="supplier-description reveal">
+    <div class="section-head" style="margin-bottom:26px">
+      <div>
+        <span class="eyebrow">Kursusbeskrivelse</span>
+        <h2 class="display" style="margin-top:18px">${esc(course.seo_title || course.title)}</h2>
+      </div>
+      ${course.product_type ? `<p class="lead">${esc(course.product_type)} fra ${esc(course.supplier_name || 'udbyderen')}</p>` : ''}
+    </div>
+    <div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>
   </div>
 </section>` : ''}
 
@@ -615,10 +643,12 @@ ${related.length === 0 ? `
       card.setAttribute('aria-checked', 'true');
       card.tabIndex = 0;
       const dt = card.dataset;
-      selectedSession = { id: +dt.id, date: dt.date, location: dt.loc, venue: dt.venue || '', format: dt.format };
+      selectedSession = { id: +dt.id, date: dt.date, location: dt.loc, venue: dt.venue || '', format: dt.format, price: +(dt.price || course.price || 0) };
       if (sumLoc)  sumLoc.textContent  = dt.loc;
       if (sumDate) sumDate.textContent = fmtDateFull(dt.date);
       if (sumFmt)  sumFmt.textContent  = dt.format;
+      const sumTotal = document.querySelector('.bs-total .tval');
+      if (sumTotal) sumTotal.innerHTML = priceMarkup(dt.price || course.price, course.badge);
       if (sbSub)   sbSub.textContent   = `${dt.loc} · ${fmtDateFull(dt.date)}`;
       setScarcity(dt.seats ? +dt.seats : null);
       setBookingCta(true);
@@ -673,12 +703,13 @@ ${related.length === 0 ? `
         el.dataset.venue  = s.venue || '';
         el.dataset.format = s.format;
         el.dataset.seats  = seats;
+        el.dataset.price  = s.variant_price != null ? s.variant_price : (+course.price || 0);
         el.dataset.online = String(!!s.is_online);
         el.innerHTML = `
           <div class="session-date"><div class="d">${day}</div><div class="m">${mon}</div></div>
           <div class="session-main">
             <div class="sloc">${esc(s.venue || s.location)} ${popTag}</div>
-            <div class="smeta"><span>${esc(s.location)}</span><span>09:00–16:00</span></div>
+            <div class="smeta"><span>${esc(s.location)}</span><span>${s.date_text ? esc(s.date_text) : '09:00–16:00'}${s.end_date ? ' · slutter ' + fmtDateFull(s.end_date) : ''}</span></div>
           </div>
           <span class="session-format${s.is_online?' online':''}">${s.is_online?'Online':'Fysisk'}</span>
           <div class="session-seats">${seatTxt}</div>
@@ -793,7 +824,7 @@ ${related.length === 0 ? `
         venue: selectedSession.venue || '',
         format: selectedSession.format,
         participants: 1,
-        unit_price: +course.price || 0,
+        unit_price: selectedSession.price != null ? selectedSession.price : (+course.price || 0),
         badge: course.badge || '',
         url: 'kursus.html?id=' + course.id,
       });
@@ -905,7 +936,7 @@ ${related.length === 0 ? `
       document.getElementById('bm-sum-title').textContent = course.title;
       if (isBooking && selectedSession) {
         if (meta) meta.textContent = `${selectedSession.location} · ${fmtDateFull(selectedSession.date)} · ${selectedSession.format}`;
-        if (price) price.textContent = fmtPrice(course.price, course.badge) + ' ekskl. moms';
+        if (price) price.textContent = fmtPrice(selectedSession.price != null ? selectedSession.price : course.price, course.badge) + ' ekskl. moms';
       } else if (isFirm) {
         if (meta) meta.textContent = 'Lukket hold for jeres team · fysisk eller online';
         if (price) price.textContent = 'Svar inden for én hverdag';

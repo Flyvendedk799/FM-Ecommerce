@@ -62,6 +62,28 @@
 .rotating-word.fade-out { opacity: 0; filter: blur(7px); transform: translateY(-10px); }
 .rotating-word.fade-in { opacity: 0; filter: blur(7px); transform: translateY(14px); }
 .lp-sub { margin-top: 28px; font-size: clamp(1rem,1.5vw,1.2rem); color: rgba(237,230,214,.8); line-height: 1.58; max-width: 44ch; }
+.lp-search {
+  display: flex; align-items: center; gap: 0;
+  width: min(100%, 560px); margin-top: 30px;
+  background: rgba(237,230,214,.1); border: 1px solid rgba(237,230,214,.22);
+  border-radius: 100px; overflow: hidden; backdrop-filter: blur(10px);
+  transition: border-color .25s, background .25s, box-shadow .25s var(--ease);
+}
+.lp-search:focus-within {
+  background: rgba(237,230,214,.14); border-color: rgba(237,230,214,.44);
+  box-shadow: 0 20px 48px -32px rgba(0,0,0,.75);
+}
+.lp-search input {
+  flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+  color: var(--paper); font: 600 15px var(--sans); padding: 17px 22px;
+}
+.lp-search input::placeholder { color: rgba(237,230,214,.43); font-weight: 500; }
+.lp-search button {
+  flex-shrink: 0; margin: 6px; border-radius: 100px; padding: 13px 22px;
+  background: var(--accent); color: var(--on-accent); font-size: 14px; font-weight: 800;
+  transition: transform .25s var(--ease), background .25s;
+}
+.lp-search button:hover { background: var(--accent-deep); transform: translateY(-1px); }
 .lp-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 36px; }
 .lp-btn-primary {
   display: inline-flex; align-items: center; gap: 10px;
@@ -179,6 +201,10 @@
 .cat-preview span { font-size: 12.5px; color: rgba(237,230,214,.7); }
 .cat-arrow { position: absolute; right: 22px; bottom: 22px; width: 42px; height: 42px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; font-size: 17px; opacity: 0; transform: translateY(8px); transition: opacity .4s var(--ease), transform .4s var(--ease); }
 .cat-card:hover .cat-arrow { opacity: 1; transform: none; }
+.cat-card.is-empty { opacity: .56; cursor: default; }
+.cat-card.is-empty:hover { transform: none; box-shadow: none; }
+.cat-card.is-empty .cat-arrow { display: none; }
+.cat-card.is-empty .cat-count { color: rgba(237,230,214,.52); }
 
 /* ---- how it works ---- */
 .how-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: clamp(24px,4vw,52px); margin-top: 52px; position: relative; }
@@ -192,6 +218,7 @@
 
 /* ---- featured ---- */
 .featured-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; }
+.no-featured { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
 @media(max-width:1000px){.featured-grid{grid-template-columns:1fr 1fr;}}
 @media(max-width:540px){.featured-grid{grid-template-columns:1fr;}}
 
@@ -223,6 +250,9 @@
 @media(max-width:680px){
   .lp-hero-inner { padding-top: 110px; padding-bottom: 60px; }
   .lp-sub { margin-top: 20px; }
+  .lp-search { margin-top: 24px; border-radius: 22px; align-items: stretch; flex-direction: column; }
+  .lp-search input { width: 100%; padding: 16px 18px 6px; text-align: center; }
+  .lp-search button { width: calc(100% - 12px); }
   .lp-ctas { margin-top: 28px; gap: 14px; }
   .lp-cat-pills { margin-top: 24px; gap: 7px; }
   .lp-cat-pill { font-size: 12px; padding: 7px 12px; }
@@ -275,6 +305,10 @@
         </span>
       </h1>
       <p class="lp-sub">Futurematch samler kurser fra Danmarks bedste udbydere ét sted. Sammenlign, vælg og book — enkelt og hurtigt.</p>
+      <form class="lp-search" id="lp-search" role="search">
+        <input type="search" id="lp-search-input" placeholder="Søg fx projektledelse, Excel eller arbejdsmiljø" aria-label="Søg efter kurser">
+        <button type="submit">Søg</button>
+      </form>
       <div class="lp-ctas">
         <a class="lp-btn-primary" href="Kategorier.html">Udforsk kurser <span class="arrow">→</span></a>
         <a class="lp-link" href="#how">Sådan virker det ↓</a>
@@ -294,7 +328,7 @@
         <div class="orb-ring-1"></div>
         <div class="orb-ring-2"></div>
         <div class="orb-core">
-          <div class="oc-num">800<sup>+</sup></div>
+          <div class="oc-num" data-hero-course-count>317</div>
           <div class="oc-label">kurser</div>
         </div>
         <a class="orb-chip" href="Kategorier.html#ledelse" style="top:18px;left:8px;--dur:4.2s;--delay:0s;--lift:11px;--rot:1deg;"><span class="oc-dot" style="background:#FF5A1F;"></span>Ledelse</a>
@@ -312,10 +346,10 @@
 
 <!-- STATS BAND -->
 <div class="stats-band wrap">
-  <div class="stat-item reveal"><div class="stat-num" data-target="800">0<span class="stat-plus">+</span></div><div class="stat-label">kurser</div></div>
-  <div class="stat-item reveal reveal-d1"><div class="stat-num" data-target="120">0<span class="stat-plus">+</span></div><div class="stat-label">udbydere</div></div>
-  <div class="stat-item reveal reveal-d2"><div class="stat-num" data-target="45000">0<span class="stat-plus">+</span></div><div class="stat-label">kursister</div></div>
-  <div class="stat-item reveal reveal-d3"><div class="stat-num" data-target-rating="4.8">4.8<span class="stat-plus"> ★</span></div><div class="stat-label">gennemsnitsrating</div></div>
+  <div class="stat-item reveal"><div class="stat-num" data-target="317" data-stat="courses">0</div><div class="stat-label">aktive kurser</div></div>
+  <div class="stat-item reveal reveal-d1"><div class="stat-num" data-target="5" data-stat="suppliers">0</div><div class="stat-label">udbydere</div></div>
+  <div class="stat-item reveal reveal-d2"><div class="stat-num" data-target="440" data-stat="sessions">0</div><div class="stat-label">kommende datoer</div></div>
+  <div class="stat-item reveal reveal-d3"><div class="stat-num" data-target="6" data-stat="categories">0</div><div class="stat-label">aktive områder</div></div>
 </div>
 
 <!-- CATEGORIES -->
@@ -334,8 +368,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">01 · Bløde kompetencer</div>
         <h3 class="cat-name">Ledelse &amp;<br>Kommunikation</h3>
-        <div class="cat-count">48 kurser</div>
-        <div class="cat-preview"><span>→ Forhandlingsteknik</span><span>→ Præsentationsteknik</span><span>→ Konflikthåndtering</span></div>
+        <div class="cat-count">38 kurser</div>
+        <div class="cat-preview"><span>→ Kommunikation</span><span>→ Samarbejde</span><span>→ Ledelse</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -345,8 +379,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">02 · Digitale kompetencer</div>
         <h3 class="cat-name">IT &amp; Data</h3>
-        <div class="cat-count">62 kurser</div>
-        <div class="cat-preview"><span>→ Excel Avanceret</span><span>→ Power BI Dashboard</span><span>→ Python for Professionals</span></div>
+        <div class="cat-count">124 kurser</div>
+        <div class="cat-preview"><span>→ Data</span><span>→ Microsoft</span><span>→ Digitalisering</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -356,8 +390,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">03 · Internationalt anerkendt</div>
         <h3 class="cat-name">Certificering</h3>
-        <div class="cat-count">31 kurser</div>
-        <div class="cat-preview"><span>→ PRINCE2® Foundation</span><span>→ ITIL® 4 Foundation</span><span>→ Lean Practitioner</span></div>
+        <div class="cat-count">64 kurser</div>
+        <div class="cat-preview"><span>→ Foundation</span><span>→ Eksamen</span><span>→ Certifikat</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -367,8 +401,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">04 · Praktisk & akkrediteret</div>
         <h3 class="cat-name">Sundhed &amp;<br>Omsorg</h3>
-        <div class="cat-count">27 kurser</div>
-        <div class="cat-preview"><span>→ Førstehjælp & HLR</span><span>→ Psykisk Førstehjælp</span><span>→ Hygiejnekursus</span></div>
+        <div class="cat-count">22 kurser</div>
+        <div class="cat-preview"><span>→ Trivsel</span><span>→ Arbejdsmiljø</span><span>→ Sundhed</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -378,8 +412,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">05 · Staten finansierer</div>
         <h3 class="cat-name">AMU /<br>Erhvervsfaglig</h3>
-        <div class="cat-count">86 kurser</div>
-        <div class="cat-preview"><span>→ Kloakmester (AMU)</span><span>→ Svejsning MIG/MAG</span><span>→ Logistik & lager</span></div>
+        <div class="cat-count">0 kurser</div>
+        <div class="cat-preview"><span>→ Nye hold</span><span>→ Kommer senere</span><span>→ Leverandørbatch</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -389,8 +423,8 @@
       <div class="cat-content">
         <div class="cat-eyebrow">06 · Kommercielle kompetencer</div>
         <h3 class="cat-name">Salg &amp;<br>Kundeservice</h3>
-        <div class="cat-count">39 kurser</div>
-        <div class="cat-preview"><span>→ Salgspsykologi</span><span>→ Telefonist & service</span><span>→ Personlig branding</span></div>
+        <div class="cat-count">69 kurser</div>
+        <div class="cat-preview"><span>→ Salg</span><span>→ Service</span><span>→ Relationer</span></div>
       </div>
       <div class="cat-arrow">→</div>
     </a>
@@ -410,7 +444,7 @@
     <div class="how-step reveal">
       <div class="how-num">1</div>
       <h3>Find dit kursus</h3>
-      <p>Søg og filtrer blandt 800+ kurser fra 120+ udbydere. Filtrer på kategori, format, varighed og pris.</p>
+      <p>Søg og filtrer i det aktuelle katalog. Filtrer på kategori, format, varighed, udbyder og by.</p>
     </div>
     <div class="how-step reveal reveal-d1">
       <div class="how-num">2</div>
@@ -434,24 +468,7 @@
     </div>
     <a class="see-all" href="Kategorier.html">Se alle kurser <span class="arrow" style="color:var(--accent);">→</span></a>
   </div>
-  <div class="featured-grid">
-    <a class="rc-card reveal" href="kursus.html?id=1">
-      <div class="rc-top" style="background:#2C1A0A"><span class="rc-cat">Ledelse</span><span class="rc-rating"><span class="rc-star">★</span>4,8</span><span class="rc-go">→</span></div>
-      <div class="rc-body"><h3 class="rc-title">Forhandlingsteknik</h3><div class="rc-supplier">Competence Way</div><div class="rc-foot"><span class="rc-dur">1 dag</span><span class="rc-price">kr. 6.900<small> ekskl. moms</small></span></div></div>
-    </a>
-    <a class="rc-card reveal reveal-d1" href="Kategorier.html#cert">
-      <div class="rc-top" style="background:#1E0E3C"><span class="rc-cat">Certificering</span><span class="rc-rating"><span class="rc-star">★</span>4,9</span><span class="rc-go">→</span></div>
-      <div class="rc-body"><h3 class="rc-title">PRINCE2® Foundation</h3><div class="rc-supplier">PM Academy</div><div class="rc-foot"><span class="rc-dur">3 dage + eksamen</span><span class="rc-price">kr. 14.900<small> ekskl. moms</small></span></div></div>
-    </a>
-    <a class="rc-card reveal reveal-d2" href="Kategorier.html#sundhed">
-      <div class="rc-top" style="background:#0E2A1C"><span class="rc-cat">Sundhed</span><span class="rc-rating"><span class="rc-star">★</span>4,9</span><span class="rc-go">→</span></div>
-      <div class="rc-body"><h3 class="rc-title">Førstehjælp & HLR</h3><div class="rc-supplier">Dansk Røde Kors</div><div class="rc-foot"><span class="rc-dur">1 dag</span><span class="rc-price">kr. 3.200<small> ekskl. moms</small></span></div></div>
-    </a>
-    <a class="rc-card reveal reveal-d3" href="Kategorier.html#it">
-      <div class="rc-top" style="background:#0D1A38"><span class="rc-cat">IT & Data</span><span class="rc-rating"><span class="rc-star">★</span>4,8</span><span class="rc-go">→</span></div>
-      <div class="rc-body"><h3 class="rc-title">Excel — Avanceret</h3><div class="rc-supplier">DataSkolen</div><div class="rc-foot"><span class="rc-dur">2 dage</span><span class="rc-price">kr. 8.900<small> ekskl. moms</small></span></div></div>
-    </a>
-  </div>
+  <div class="featured-grid" aria-live="polite"></div>
 </section>
 
 <!-- FOR UDBYDERE -->
@@ -465,9 +482,9 @@
       <a class="btn-supplier" href="Kontakt.html?emne=udbyder">Bliv udbyder <span class="arrow">→</span></a>
     </div>
     <div class="sc-stats">
-      <div class="sc-stat"><b>45.000<span style="color:var(--accent);font-family:var(--sans);font-size:.7em">+</span></b><span>aktive brugere søger kurser hver måned</span></div>
-      <div class="sc-stat"><b>4,8 ★</b><span>gennemsnitsrating på tværs af alle udbydere</span></div>
-      <div class="sc-stat"><b>120<span style="color:var(--accent);font-family:var(--sans);font-size:.7em">+</span></b><span>udbydere stoler allerede på Futurematch</span></div>
+      <div class="sc-stat"><b><span data-lp-course-count>317</span></b><span>aktive kurser i første leverandørbatch</span></div>
+      <div class="sc-stat"><b><span data-lp-session-count>440</span></b><span>kommende kursusdatoer klar til booking</span></div>
+      <div class="sc-stat"><b><span data-lp-supplier-count>5</span></b><span>udbydere i det importerede katalog</span></div>
     </div>
   </div>
 </section>

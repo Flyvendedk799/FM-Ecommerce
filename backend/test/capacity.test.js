@@ -12,12 +12,12 @@ process.env.ADMIN_TOKEN = 'test-token';
 const test = require('node:test');
 const assert = require('node:assert');
 const app = require('../app');
-const { ADMIN, boot, makeClient, jsonReq } = require('../test-helpers');
+const { ADMIN, boot, makeClient, jsonReq, seedTestCatalog } = require('../test-helpers');
 
 let server, base;
 const j = makeClient(() => base);
 
-test.before(() => { ({ server, base } = boot(app)); });
+test.before(async () => { ({ server, base } = boot(app)); await seedTestCatalog(j); });
 test.after(() => server.close());
 
 const seatsRemaining = async (sessionId) => {

@@ -13,12 +13,12 @@ process.env.ADMIN_PASSWORD = 'abe12345';
 const test = require('node:test');
 const assert = require('node:assert');
 const app = require('../app');
-const { ADMIN, boot, makeClient, jsonReq } = require('../test-helpers');
+const { ADMIN, boot, makeClient, jsonReq, seedTestCatalog } = require('../test-helpers');
 
 let server, base;
 const j = makeClient(() => base);
 
-test.before(() => { ({ server, base } = boot(app)); });
+test.before(async () => { ({ server, base } = boot(app)); await seedTestCatalog(j); });
 test.after(() => server.close());
 
 /* ---- 1. Auth gate on mutating endpoints: 401 without token ---- */
@@ -86,8 +86,8 @@ test('writes succeed (non-401) WITH admin token', async () => {
 
 /* ---- 2. PII reads gated ---- */
 test('PII reads are 401 without token, 200 with', async () => {
-  // The seed creates sample bookings (so booking id 1 exists) but NO inquiries,
-  // so create one to give the inquiry /:id read a real 200 target.
+  // The per-file fixture creates booking id 1, but inquiries are still created
+  // inside the test so the PII /:id read has a real target.
   const inq = await j('/api/inquiries', jsonReq('POST',
     { email: 'piiseed@example.com', message: 'hi' }));
   assert.strictEqual(inq.status, 201);

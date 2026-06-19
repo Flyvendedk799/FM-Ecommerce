@@ -4,17 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kurser — Futurematch</title>
-<meta name="description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris inden for ledelse, IT & data, certificering, sundhed, AMU og salg.">
+<meta name="description" content="Udforsk Futurematchs aktuelle kursuskatalog. Søg og filtrer på kategori, format, varighed, udbyder, by og pris.">
 <link rel="canonical" href="Kategorier.html">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <meta property="og:title" content="Kurser — Futurematch">
-<meta property="og:description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris.">
+<meta property="og:description" content="Udforsk Futurematchs aktuelle kursuskatalog. Søg og filtrer på kategori, format, varighed, udbyder, by og pris.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Futurematch">
 <meta property="og:image" content="/favicon.svg">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="Kurser — Futurematch">
-<meta name="twitter:description" content="Udforsk over 800 kurser fra 120+ danske udbydere. Søg og filtrer på kategori, format, varighed og pris.">
+<meta name="twitter:description" content="Udforsk Futurematchs aktuelle kursuskatalog. Søg og filtrer på kategori, format, varighed, udbyder, by og pris.">
 <meta name="twitter:image" content="/favicon.svg">
 <link rel="stylesheet" href="styles.css">
 <style>
@@ -97,6 +97,9 @@
 .f-chip.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 .f-chip.accent-active { border-color:var(--accent); color:var(--accent-deep); background:color-mix(in srgb,var(--accent) 12%,var(--paper)); }
 .filter-sep { width:1px; height:22px; background:var(--line); margin:0 4px; }
+.filter-field { display:flex; align-items:center; gap:7px; padding:4px 10px; border:1.5px solid var(--line); border-radius:100px; background:var(--paper); }
+.filter-field label { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+.filter-field select { min-width:112px; max-width:174px; border:none; background:transparent; font-family:var(--sans); font-size:13px; color:var(--ink); cursor:pointer; outline:none; padding:3px 0; }
 .filter-sort { margin-left:auto; display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
 .filter-sort select { border:none; background:transparent; font-family:var(--sans); font-size:13px; color:var(--muted); cursor:pointer; outline:none; padding:4px 0; }
 
@@ -107,6 +110,8 @@
   .filter-inner::-webkit-scrollbar { display: none; }
   .filter-label { display: none; }
   .filter-sep { display: none; }
+  .filter-field { flex-shrink: 0; }
+  .filter-field select { max-width: 150px; }
   .filter-sort { margin-left: 0; flex-shrink: 0; }
   .f-chip { flex-shrink: 0; }
   .cat-breadcrumb { margin-bottom: 14px; }

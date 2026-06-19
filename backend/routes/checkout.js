@@ -73,7 +73,7 @@ router.post('/', wrapAsync(async (req, res) => {
       if (session.status !== 'active') throw httpError(409, `${session.course_title || 'Holdet'} er ikke længere åbent for tilmelding`);
       if (isISODate(session.date) && session.date < today) throw httpError(409, `${session.course_title || 'Holdet'} er allerede afholdt`);
 
-      const unitPrice = Math.max(0, Number(session.price || 0));
+      const unitPrice = Math.max(0, Number(session.variant_price != null ? session.variant_price : session.price || 0));
       const subtotal = unitPrice * participants;
       const discount = lineDiscount(subtotal, participants);
       normalized.push({

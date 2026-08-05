@@ -54,6 +54,8 @@ if (!config.isTest) {
   app.use('/api/bookings', onlyPost);
   app.use('/api/checkout', onlyPost);
   app.use('/api/inquiries', onlyPost);
+  app.use('/api/reviews', onlyPost);
+  app.use('/api/orders/lookup', onlyPost);
   // brute-force guard on admin login
   app.use('/api/admin/login', rateLimit({ windowMs: 60_000, max: 10, standardHeaders: true, legacyHeaders: false,
     message: { error: 'For mange loginforsøg — prøv igen om lidt.' } }));
@@ -69,6 +71,7 @@ app.use('/api/bookings',   require('./routes/bookings'));
 app.use('/api/checkout',   require('./routes/checkout'));
 app.use('/api/orders',     require('./routes/orders'));
 app.use('/api/inquiries',  require('./routes/inquiries'));
+app.use('/api/reviews',    require('./routes/reviews'));
 // Direct stats (admin-only) — single hop, no redirect.
 app.get('/api/stats', requireAdmin, wrapAsync(async (req, res) => res.json(await getStats())));
 

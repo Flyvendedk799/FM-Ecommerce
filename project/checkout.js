@@ -163,6 +163,13 @@
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok) throw new Error(data.error || 'Ordren kunne ikke oprettes');
       Cart.clear();
+      if (window.FuturematchAccount) {
+        window.FuturematchAccount.recordOrder(
+          Object.assign({ payment_method: payload.payment_method }, data.order),
+          payload.customer,
+          items
+        );
+      }
       showSuccess(data.order, payload.customer.email);
     } catch (err) {
       submit.disabled = false;
@@ -178,9 +185,10 @@
       '<p>Vi har reserveret dine valgte pladser og sender en bekræftelse til <b>' + esc(email) + '</b> inden for 24 timer.</p>' +
       '<div class="order-reference"><span>Ordrenummer</span><strong>' + esc(order.reference) + '</strong></div>' +
       '<div class="summary-actions" style="max-width:360px;margin:28px auto 0">' +
-        '<a class="summary-primary" href="Kategorier.html">Se flere kurser</a>' +
-        '<a class="summary-secondary" href="Kontakt.html">Kontakt os</a>' +
+        '<a class="summary-primary" href="MinSide.html">Gå til Min side <span>→</span></a>' +
+        '<a class="summary-secondary" href="Kategorier.html">Se flere kurser</a>' +
       '</div>' +
+      '<p class="checkout-note" style="margin-top:18px">På <b>Min side</b> kan du følge din ordrestatus, se hvor og hvornår du skal møde op — og føje kurset til din kalender.</p>' +
     '</div>';
     Cart.updateBadges([]);
     window.scrollTo({ top: 0, behavior: 'smooth' });

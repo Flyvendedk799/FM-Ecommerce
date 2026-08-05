@@ -285,8 +285,12 @@
             ? 'kr. ' + (+c.price).toLocaleString('da-DK') + '<small> ekskl. moms</small>'
             : '<span style="color:var(--accent)">Pris på forespørgsel</span>';
           const d = i ? ' reveal-d' + i : '';
+          const img = c.image_src
+            ? '<img class="rc-img" src="' + esc(c.image_src) + '" alt="" loading="lazy" onerror="this.closest(&quot;.rc-top&quot;).classList.remove(&quot;has-img&quot;)">'
+            : '';
           return '<a class="rc-card reveal' + d + '" href="kursus.html?id=' + (+c.id) + '">' +
-            '<div class="rc-top" style="background:' + safeColor(c.color) + '">' +
+            '<div class="rc-top' + (c.image_src ? ' has-img' : '') + '" style="background:' + safeColor(c.color) + '">' +
+              img +
               '<span class="rc-cat">' + esc(shortCat) + '</span>' +
               '<span class="rc-rating">' + esc(dateLabel) + '</span>' +
               '<span class="rc-go">→</span>' +

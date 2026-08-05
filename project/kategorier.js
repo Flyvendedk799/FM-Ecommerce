@@ -145,8 +145,15 @@
     var loc = locationSummary(c);
     if (loc) supplierLine += ' · ' + escAttr(loc);
     if (c.reviews > 0) supplierLine += ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.';
+    // Vendor images are logos/screenshots in every aspect ratio, so they sit
+    // contained on a light media area; a load failure falls back to the
+    // colored top by removing .has-img.
+    var imgHTML = c.image
+      ? '<img class="cc-img" src="' + escAttr(c.image) + '" alt="' + escAttr(c.imageAlt || c.title) + '" loading="lazy" onerror="this.closest(&quot;.cc-top&quot;).classList.remove(&quot;has-img&quot;)">'
+      : '';
     return '<a class="cc-card reveal" href="' + escAttr(c.url) + '">' +
-      '<div class="cc-top" style="background:' + safeColor(c.color) + '">' +
+      '<div class="cc-top' + (c.image ? ' has-img' : '') + '" style="background:' + safeColor(c.color) + '">' +
+        imgHTML +
         '<div class="cc-cat-row">' +
           '<span class="cc-cat">' + escAttr(catLabel) + '</span>' +
           cardSignalHTML(c) +
@@ -665,6 +672,8 @@
             price:    c.price || 0,
             color:    c.color || '#2C1A0A',
             badge:    c.badge || null,
+            image:    c.image_src || '',
+            imageAlt: c.image_alt_text || '',
             sourceHandle: c.source_handle || '',
             productType: c.product_type || '',
             tags:     c.tags || '',

@@ -127,6 +127,15 @@
 .cc-card { display:flex; flex-direction:column; border-radius:var(--radius-lg); overflow:hidden; background:var(--paper-2); border:1.5px solid var(--line); text-decoration:none; color:var(--ink); transition:transform .4s var(--ease),border-color .4s,box-shadow .4s; }
 .cc-card:hover { transform:translateY(-5px); border-color:var(--ink); box-shadow:0 22px 40px -24px rgba(23,21,14,.5); }
 .cc-top { position:relative; padding:20px 20px 44px; }
+/* card with vendor image — light media area, contained image, readable chips */
+.cc-top.has-img { background:#fff !important; aspect-ratio:16/10; padding:16px 16px 14px; display:flex; flex-direction:column; justify-content:space-between; }
+.cc-img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; padding:clamp(14px,8%,30px); }
+.cc-top:not(.has-img) .cc-img { display:none; }
+.cc-top.has-img .cc-cat-row, .cc-top.has-img .cc-badges { position:relative; z-index:1; }
+.cc-top.has-img .cc-badges { position:static; align-self:flex-start; }
+.cc-top.has-img .cc-cat { background:var(--ink); color:var(--paper); }
+.cc-top.has-img .cc-rating { color:var(--ink); background:rgba(255,255,255,.78); backdrop-filter:blur(4px); padding:4px 10px; border-radius:100px; }
+.cc-top.has-img .cc-badge.amu { background:var(--ink); color:var(--paper); }
 .cc-cat-row { display:flex; align-items:center; justify-content:space-between; }
 .cc-cat { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--paper); background:rgba(255,255,255,.14); padding:5px 10px; border-radius:100px; }
 .cc-rating { font-size:12.5px; font-weight:700; color:var(--paper); display:flex; align-items:center; gap:4px; }
@@ -239,6 +248,8 @@
   <div class="footer-bottom"><span>© 2026 Futurematch ApS · CVR 12345678</span><span>Lavet i Danmark 🇩🇰</span></div>
 </footer>
 
+<script src="account.js"></script>
+<script src="search.js"></script>
 <script src="cart.js"></script>
 <script src="kategorier.js"></script>
 </body>

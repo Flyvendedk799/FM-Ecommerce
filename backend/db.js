@@ -294,6 +294,19 @@ function schemaSql(isPg) {
     created_at TEXT DEFAULT ${NOW}
   );
 
+  CREATE TABLE IF NOT EXISTS reviews (
+    id ${ID},
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    order_reference TEXT DEFAULT '',
+    name TEXT DEFAULT '',
+    email TEXT NOT NULL,
+    rating INTEGER NOT NULL,
+    comment TEXT DEFAULT '',
+    status TEXT DEFAULT 'approved',      -- approved | hidden
+    created_at TEXT DEFAULT ${NOW},
+    UNIQUE (course_id, email)
+  );
+
   CREATE TABLE IF NOT EXISTS inquiries (
     id ${ID},
     type TEXT DEFAULT 'contact',          -- contact | firmahold | notify | udbyder
@@ -321,6 +334,7 @@ function schemaSql(isPg) {
   CREATE INDEX IF NOT EXISTS idx_bookings_status   ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_inquiries_course  ON inquiries(course_id);
   CREATE INDEX IF NOT EXISTS idx_inquiries_status  ON inquiries(status);
+  CREATE INDEX IF NOT EXISTS idx_reviews_course    ON reviews(course_id);
   `;
 }
 

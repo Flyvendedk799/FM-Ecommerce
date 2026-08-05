@@ -7,6 +7,39 @@ const { httpError } = require('../validate');
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'cancelled'];
 
+function itemsSql(cols) {
+  return `
+  SELECT ${cols}, sess.date, sess.end_date, sess.location, sess.venue, sess.format,
+         sess.is_online, sess.date_text,
+         c.id AS course_id, c.title AS course_title, c.badge, c.duration, c.image_src,
+         s.name AS supplier_name
+  FROM bookings b
+  LEFT JOIN sessions sess ON sess.id = b.session_id
+  LEFT JOIN courses c ON c.id = sess.course_id
+  LEFT JOIN suppliers s ON s.id = c.supplier_id
+  WHERE b.order_id = ?
+  ORDER BY b.id ASC
+`;
+}
+// The customer-facing lookup returns only what Min side needs; admin gets b.*.
+const PUBLIC_ITEMS_SQL = itemsSql('b.id, b.session_id, b.participants, b.unit_price, b.discount, b.line_total, b.status');
+const ADMIN_ITEMS_SQL = itemsSql('b.*');
+
+/* ---- public: a customer fetches their own order — reference AND e-mail
+   must both match, so the reference alone leaks nothing. ---- */
+router.post('/lookup', wrapAsync(async (req, res) => {
+  const reference = String(req.body.reference || '').trim().toUpperCase();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  if (!reference || !email) throw httpError(400, 'Ordrenummer og e-mail er påkrævet');
+  const order = await db.get(
+    'SELECT * FROM orders WHERE UPPER(reference) = ? AND LOWER(customer_email) = ?',
+    reference, email
+  );
+  if (!order) return res.status(404).json({ error: 'Ingen ordre matcher det ordrenummer og den e-mail' });
+  const items = await db.all(PUBLIC_ITEMS_SQL, order.id);
+  res.json({ ...order, items });
+}));
+
 router.use(requireAdmin);
 
 function statusStrict(value, current) {
@@ -42,17 +75,7 @@ router.get('/', wrapAsync(async (req, res) => {
 router.get('/:id', wrapAsync(async (req, res) => {
   const order = await db.get('SELECT * FROM orders WHERE id = ?', req.params.id);
   if (!order) return res.status(404).json({ error: 'Not found' });
-  const items = await db.all(`
-    SELECT b.*, sess.date, sess.location, sess.venue, sess.format,
-           c.id AS course_id, c.title AS course_title, c.badge,
-           s.name AS supplier_name
-    FROM bookings b
-    LEFT JOIN sessions sess ON sess.id = b.session_id
-    LEFT JOIN courses c ON c.id = sess.course_id
-    LEFT JOIN suppliers s ON s.id = c.supplier_id
-    WHERE b.order_id = ?
-    ORDER BY b.id ASC
-  `, order.id);
+  const items = await db.all(ADMIN_ITEMS_SQL, order.id);
   res.json({ ...order, items });
 }));
 

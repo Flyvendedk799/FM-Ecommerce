@@ -120,9 +120,10 @@
 
   async function init() {
     try {
-      const [course, sessions] = await Promise.all([
+      const [course, sessions, reviews] = await Promise.all([
         fetch('/api/courses/' + courseId).then(r => { if (!r.ok) throw new Error('Kurset findes ikke'); return r.json(); }),
         fetch('/api/sessions?course_id=' + courseId).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/reviews?course_id=' + courseId).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       // Fetch up to 4 related courses from same category
@@ -135,7 +136,7 @@
       }
 
       currentCourse = course;
-      renderPage(course, sessions, related);
+      renderPage(course, sessions, related, Array.isArray(reviews) ? reviews : []);
     } catch (e) {
       showError(e.message || 'Kurset kunne ikke hentes.');
     }
@@ -144,7 +145,7 @@
   /* ============================================================
      PAGE RENDER
   ============================================================ */
-  function renderPage(course, sessions, related) {
+  function renderPage(course, sessions, related, reviews) {
     // Set title and accent
     document.title = course.title + ' — Futurematch';
     document.querySelector('meta[name="description"]')?.setAttribute('content', course.short_description || '');
@@ -178,7 +179,7 @@
     const hasBookableSessions = locKeys.some(k => (byLoc[k] || []).some(hasSeat));
 
     // Build HTML
-    contentEl.innerHTML = buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related);
+    contentEl.innerHTML = buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related, reviews || []);
 
     // Show content
     loading.hidden = true;
@@ -198,6 +199,7 @@
     initReveals();
     bindScrollBtns();
     initSessionPicker(byLoc, locKeys, course);
+    initDescription();
     initCurriculum();
     initCartActions(course);
     initBookingModal(course);
@@ -213,7 +215,7 @@
   /* ============================================================
      HTML BUILDERS
   ============================================================ */
-  function buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related) {
+  function buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related, reviews) {
     const priceStr  = fmtPrice(course.price, badge);
     const chipLabel = esc(course.category_label || 'Kursus');
     const factsHTML = facts.slice(0, 4).map((f, i) => `
@@ -289,7 +291,8 @@
     <aside class="hero-aside reveal reveal-d2 is-in">
       <div class="hero-media" data-parallax>
         ${course.image_src
-          ? `<img class="hero-course-img" src="${esc(course.image_src)}" alt="${esc(course.image_alt_text || course.title)}" loading="eager">`
+          ? `<img class="hero-media-backdrop" src="${esc(course.image_src)}" alt="" aria-hidden="true">
+             <img class="hero-course-img" src="${esc(course.image_src)}" alt="${esc(course.image_alt_text || course.title)}" loading="eager" onerror="this.closest('.hero-media').classList.add('img-failed')">`
           : '<image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>'}
         <div class="hero-media-tag">
           <span class="chip accent"><span class="dot" style="background:var(--on-accent)"></span>${esc(course.duration || '1 dag')}</span>
@@ -372,33 +375,10 @@ ${outcomes.length > 0 ? `
 </section>` : ''}
 
 <!-- ============ SOCIAL PROOF ============ -->
-${course.rating && course.review_count ? `
-<section class="proof wrap">
-  <div class="proofbar reveal">
-    <div class="proof-stat">
-      <span class="ps-num">${(+course.rating).toFixed(1).replace('.',',')}</span>
-      <span class="ps-stars">★★★★★</span>
-      <span class="ps-label">${(+course.review_count).toLocaleString('da-DK')} anmeldelser</span>
-    </div>
-    <blockquote class="proof-quote"><span class="qm">"</span>Utrolig relevant og godt struktureret kursus. Brugte teknikkerne allerede ugen efter — og det virkede.<span class="qm">"</span></blockquote>
-    <div class="proof-author"><b>Tidligere kursist</b>via Futurematch</div>
-  </div>
-</section>` : ''}
+${proofHTML(course, reviews)}
 
 <!-- ============ SUPPLIER DESCRIPTION ============ -->
-${course.body_html ? `
-<section class="section-pad wrap" id="beskrivelse">
-  <div class="supplier-description reveal">
-    <div class="section-head" style="margin-bottom:26px">
-      <div>
-        <span class="eyebrow">Kursusbeskrivelse</span>
-        <h2 class="display" style="margin-top:18px">${esc(course.seo_title || course.title)}</h2>
-      </div>
-      ${course.product_type ? `<p class="lead">${esc(course.product_type)} fra ${esc(course.supplier_name || 'udbyderen')}</p>` : ''}
-    </div>
-    <div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>
-  </div>
-</section>` : ''}
+${descriptionHTML(course)}
 
 <!-- ============ SESSION PICKER ============ -->
 <section class="section-pad wrap" id="datoer">
@@ -564,7 +544,8 @@ ${related.length > 0 ? `
   <div class="related-grid reveal reveal-d1">
     ${related.map(r => `
     <a class="rc-card" href="kursus.html?id=${+r.id}">
-      <div class="rc-top" style="background:${safeColor(r.color)}">
+      <div class="rc-top${r.image_src ? ' has-img' : ''}" style="background:${safeColor(r.color)}">
+        ${r.image_src ? `<img class="rc-img" src="${esc(r.image_src)}" alt="" loading="lazy" onerror="this.closest('.rc-top').classList.remove('has-img')">` : ''}
         <span class="rc-cat">${esc((r.category_label||'').split(' ')[0])}</span>
         <span class="rc-rating"><span class="rc-star">★</span> ${r.rating?(+r.rating).toFixed(1).replace('.',','):'—'}</span>
         <span class="rc-go" aria-hidden="true">→</span>
@@ -589,6 +570,173 @@ ${related.length === 0 ? `
 </section>` : ''}
 
 </main>`;
+  }
+
+  /* ============================================================
+     SOCIAL PROOF + REVIEWS
+     Real reviews (from Min side) take over from the canned quote as
+     soon as they exist; up to 6 written ones get their own cards.
+  ============================================================ */
+  function reviewStars(rating) {
+    const r = Math.max(1, Math.min(5, Number(rating) || 0));
+    return '★'.repeat(r) + '<span class="rev-dim">' + '★'.repeat(5 - r) + '</span>';
+  }
+
+  function proofHTML(course, reviews) {
+    const withComment = reviews.filter(r => (r.comment || '').trim());
+    if (!(course.rating && course.review_count) && !reviews.length) return '';
+
+    const quote = withComment.length
+      ? { text: withComment[0].comment, author: withComment[0].name || 'Kursist' }
+      : { text: 'Utrolig relevant og godt struktureret kursus. Brugte teknikkerne allerede ugen efter — og det virkede.', author: 'Tidligere kursist' };
+
+    const cards = withComment.slice(0, 6).map(r => `
+      <figure class="review-card reveal">
+        <div class="rev-stars">${reviewStars(r.rating)}</div>
+        <blockquote>${esc(r.comment)}</blockquote>
+        <figcaption><b>${esc(r.name || 'Kursist')}</b>${r.created_at ? ' · ' + esc(fmtDateFull(String(r.created_at).slice(0, 10))) : ''}</figcaption>
+      </figure>`).join('');
+
+    return `
+<section class="proof wrap" id="anmeldelser">
+  <div class="proofbar reveal">
+    <div class="proof-stat">
+      <span class="ps-num">${(+course.rating || 5).toFixed(1).replace('.',',')}</span>
+      <span class="ps-stars">★★★★★</span>
+      <span class="ps-label">${(+course.review_count || reviews.length).toLocaleString('da-DK')} anmeldelser</span>
+    </div>
+    <blockquote class="proof-quote"><span class="qm">"</span>${esc(quote.text)}<span class="qm">"</span></blockquote>
+    <div class="proof-author"><b>${esc(quote.author)}</b>via Futurematch</div>
+  </div>
+  ${cards ? `<div class="review-grid">${cards}</div>` : ''}
+</section>`;
+  }
+
+  /* ============================================================
+     SUPPLIER DESCRIPTION
+     Vendor exports are one long wall of <p>/<strong>/<br> HTML, so the
+     page splits them into scannable collapsible sections keyed on the
+     bold one-line headings the exports use (Beskrivelse, Udbytte, …).
+     Descriptions without detectable headings fall back to a clamped
+     block with a "read more" toggle.
+  ============================================================ */
+  const HEADING_WORDS = /^(beskrivelse|udbytte|deltagerprofil|målgruppe|indhold|kursusindhold|forudsætninger|eksamen|certificering|underviser|undervisere|praktisk|formål|program|opbygning|varighed|det lærer du|om kurset|tilmelding|niveau|metode|undervisningsform|materialer)\b/i;
+
+  function normalizeVendorHtml(html) {
+    let out = safeRichHtml(html)
+      // runs of 2+ <br> separate paragraphs in the vendor exports
+      .replace(/(?:\s*<br\s*\/?>\s*){2,}/gi, '</p><p>');
+    // strip empty inline shells (<strong></strong> etc.), repeated for nesting
+    for (let i = 0; i < 3; i++) out = out.replace(/<(strong|em|b|i|span|p)>\s*<\/\1>/gi, '');
+    return out;
+  }
+
+  function isHeadingBlock(el) {
+    if (/^H[1-6]$/.test(el.tagName)) return true;
+    const text = (el.textContent || '').trim();
+    if (!text || text.length > 70 || /[.!?]$/.test(text)) return false;
+    const strong = el.querySelector('strong, b');
+    if (!strong) return false;
+    // the whole line must be bold — a bold intro word doesn't make a heading
+    if ((strong.textContent || '').trim().length < text.length - 2) return false;
+    return HEADING_WORDS.test(text) || text.length <= 46;
+  }
+
+  // Turn a block whose lines are separated by single <br> into a styled list
+  // (the exports write "Udbytte" bullet lists exactly like that).
+  function blockHTML(el) {
+    const segText = s => { const d = document.createElement('div'); d.innerHTML = s; return (d.textContent || '').trim(); };
+    const segs = el.innerHTML.split(/<br\s*\/?>/i).map(s => s.trim()).filter(s => segText(s));
+    if (segs.length >= 3 && segs.every(s => segText(s).length <= 130)) {
+      return '<ul class="desc-list">' + segs.map(s => '<li>' + s + '</li>').join('') + '</ul>';
+    }
+    return el.outerHTML;
+  }
+
+  function splitSections(html) {
+    const doc = new DOMParser().parseFromString('<div id="dr">' + normalizeVendorHtml(html) + '</div>', 'text/html');
+    const sections = [];
+    let current = { title: '', parts: [] };
+    Array.prototype.forEach.call(doc.getElementById('dr').childNodes, node => {
+      if (node.nodeType === 3) {
+        const t = node.textContent.trim();
+        if (t) current.parts.push('<p>' + esc(t) + '</p>');
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const text = (node.textContent || '').trim();
+      if (!text && !node.querySelector('img')) return;
+      if (isHeadingBlock(node)) {
+        if (current.parts.length) sections.push(current);
+        current = { title: text.replace(/[:\s]+$/, ''), parts: [] };
+      } else {
+        current.parts.push(blockHTML(node));
+      }
+    });
+    if (current.parts.length) sections.push(current);
+    return sections;
+  }
+
+  function descriptionHTML(course) {
+    if (!course.body_html) return '';
+    let sections = [];
+    try { sections = splitSections(course.body_html); } catch (_) { /* fall back to clamp */ }
+
+    const head = `
+    <div class="section-head" style="margin-bottom:26px">
+      <div>
+        <span class="eyebrow">Kursusbeskrivelse</span>
+        <h2 class="display" style="margin-top:18px">${esc(course.seo_title || course.title)}</h2>
+      </div>
+      ${course.product_type ? `<p class="lead">${esc(course.product_type)} fra ${esc(course.supplier_name || 'udbyderen')}</p>` : ''}
+    </div>`;
+
+    if (sections.length < 2) {
+      return `
+<section class="section-pad wrap" id="beskrivelse">
+  <div class="supplier-description reveal">
+    ${head}
+    <div class="desc-clamp" id="desc-clamp">
+      <div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>
+      <div class="desc-fade"></div>
+    </div>
+    <button class="desc-toggle" id="desc-toggle" type="button">Læs hele beskrivelsen <span class="arrow">↓</span></button>
+  </div>
+</section>`;
+    }
+
+    const intro = sections[0].title === '' ? sections.shift() : null;
+    const items = sections.map((s, i) => `
+    <details class="desc-section"${i === 0 && !intro ? ' open' : ''}>
+      <summary><span class="ds-title">${esc(s.title || 'Om kurset')}</span><span class="ds-plus"></span></summary>
+      <div class="ds-body supplier-rich-content">${s.parts.join('')}</div>
+    </details>`).join('');
+
+    return `
+<section class="section-pad wrap" id="beskrivelse">
+  <div class="supplier-description reveal">
+    ${head}
+    ${intro ? `<div class="supplier-rich-content desc-intro">${intro.parts.join('')}</div>` : ''}
+    <div class="desc-sections">${items}</div>
+  </div>
+</section>`;
+  }
+
+  function initDescription() {
+    const clamp  = document.getElementById('desc-clamp');
+    const toggle = document.getElementById('desc-toggle');
+    if (!clamp || !toggle) return;
+    // short descriptions need no clamp at all
+    if (clamp.scrollHeight <= clamp.clientHeight + 60) {
+      clamp.classList.add('expanded');
+      toggle.hidden = true;
+      return;
+    }
+    toggle.addEventListener('click', () => {
+      const on = clamp.classList.toggle('expanded');
+      toggle.innerHTML = on ? 'Vis mindre <span class="arrow">↑</span>' : 'Læs hele beskrivelsen <span class="arrow">↓</span>';
+      if (!on) clamp.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    });
   }
 
   /* ============================================================

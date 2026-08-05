@@ -534,13 +534,15 @@ section { position: relative; }
 .desc-section[open] .ds-plus::before, .desc-section[open] .ds-plus::after { background: var(--paper); }
 .desc-section summary:hover .ds-plus { border-color: var(--ink); }
 .ds-body { padding: 0 2px 26px; }
+.desc-subhead { font-family: var(--sans); font-size: 15px; font-weight: 750; margin: 22px 0 8px; }
 .desc-list { margin: 10px 0 6px; padding: 0; list-style: none; }
 .desc-list li { position: relative; padding: 9px 0 9px 30px; border-bottom: 1px dashed var(--line); }
 .desc-list li:last-child { border-bottom: none; }
 .desc-list li::before { content: "→"; position: absolute; left: 2px; color: var(--accent-deep); font-weight: 700; }
 
 /* ---- clamp fallback when no sections are detectable ---- */
-.desc-clamp { position: relative; max-height: 430px; overflow: hidden; }
+.desc-clamp { position: relative; max-height: 380px; overflow: hidden; }
+.desc-clamp.intro { max-height: 300px; }
 .desc-clamp.expanded { max-height: none; }
 .desc-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 130px; background: linear-gradient(to bottom, transparent, var(--paper)); pointer-events: none; }
 .desc-clamp.expanded .desc-fade { display: none; }

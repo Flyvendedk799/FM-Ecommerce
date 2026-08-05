@@ -377,9 +377,6 @@ ${outcomes.length > 0 ? `
 <!-- ============ SOCIAL PROOF ============ -->
 ${proofHTML(course, reviews)}
 
-<!-- ============ SUPPLIER DESCRIPTION ============ -->
-${descriptionHTML(course)}
-
 <!-- ============ SESSION PICKER ============ -->
 <section class="section-pad wrap" id="datoer">
   <div class="section-head reveal">
@@ -443,6 +440,9 @@ ${descriptionHTML(course)}
     </aside>
   </div>`}
 </section>
+
+<!-- ============ SUPPLIER DESCRIPTION (below dates so booking stays in reach) ============ -->
+${descriptionHTML(course)}
 
 <!-- ============ CURRICULUM ============ -->
 ${phases.length > 0 ? `
@@ -620,10 +620,14 @@ ${related.length === 0 ? `
      Descriptions without detectable headings fall back to a clamped
      block with a "read more" toggle.
   ============================================================ */
-  const HEADING_WORDS = /^(beskrivelse|udbytte|deltagerprofil|målgruppe|indhold|kursusindhold|forudsætninger|eksamen|certificering|underviser|undervisere|praktisk|formål|program|opbygning|varighed|det lærer du|om kurset|tilmelding|niveau|metode|undervisningsform|materialer)\b/i;
+  const HEADING_WORDS = /^(beskrivelse|udbytte|dit udbytte|deltagerprofil|målgruppe|indhold|kursusindhold|emneoversigt|forudsætninger|eksamen|certificering|underviser|undervisere|om underviseren|praktisk|praktisk information|formål|kursusmål|program|dagsprogram|agenda|opbygning|varighed|det lærer du|det får du|om kurset|tilmelding|niveau|metode|undervisningsform|materialer|kursusbevis|indledning|afholdelse|sted|pris|priser|datoer|bemærkninger)\b/i;
 
   function normalizeVendorHtml(html) {
     let out = safeRichHtml(html)
+      .replace(/&nbsp;/gi, ' ')
+      // vendor exports carry inline presentation that clashes with the design
+      .replace(/\s(?:style|class|id|align|width|height|face|color|dir|lang)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/<\/?(?:font|u)\b[^>]*>/gi, '')
       // runs of 2+ <br> separate paragraphs in the vendor exports
       .replace(/(?:\s*<br\s*\/?>\s*){2,}/gi, '</p><p>');
     // strip empty inline shells (<strong></strong> etc.), repeated for nesting
@@ -631,20 +635,61 @@ ${related.length === 0 ? `
     return out;
   }
 
-  function isHeadingBlock(el) {
-    if (/^H[1-6]$/.test(el.tagName)) return true;
-    const text = (el.textContent || '').trim();
-    if (!text || text.length > 70 || /[.!?]$/.test(text)) return false;
-    const strong = el.querySelector('strong, b');
-    if (!strong) return false;
-    // the whole line must be bold — a bold intro word doesn't make a heading
-    if ((strong.textContent || '').trim().length < text.length - 2) return false;
-    return HEADING_WORDS.test(text) || text.length <= 46;
+  function headingText(text) {
+    return String(text || '').trim().replace(/[:\s]+$/, '');
   }
 
-  // Turn a block whose lines are separated by single <br> into a styled list
-  // (the exports write "Udbytte" bullet lists exactly like that).
+  // Bold short lines are headings; plain-text lines only when they are one of
+  // the section words the exports use (Målgruppe, Forudsætninger, …) — many
+  // suppliers write those without any markup at all. The comma guard keeps
+  // bold testimonial attributions ("Navn, Titel, Firma") out.
+  function isHeadingText(t, bold) {
+    if (!t || t.length > 60 || /[.!?]$/.test(t)) return false;
+    if (bold) return HEADING_WORDS.test(t) || (t.length <= 46 && !/,/.test(t));
+    return HEADING_WORDS.test(t) && t.length <= 40;
+  }
+
+  // "Modul 3: …"-style headings become subheadings inside the current
+  // section instead of flooding the accordion with one entry per module.
+  const MODULE_SUB = /^(modul|module|appendix|dag|del|trin|fase)\s*\d/i;
+
+  function plainText(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html;
+    return (d.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function isFullyBold(el) {
+    const strong = el.querySelector('strong, b');
+    return !!strong && (strong.textContent || '').trim().length >= (el.textContent || '').trim().length - 2;
+  }
+
+  function isHeadingBlock(el) {
+    if (/^H[1-6]$/.test(el.tagName)) return true;
+    return isHeadingText(headingText(el.textContent), isFullyBold(el));
+  }
+
+  // "<strong>Overskrift</strong><br>indhold…" packed into one block → split.
+  function splitLeadingHeading(el) {
+    const m = el.innerHTML.match(/^\s*<(strong|b)>\s*([^<]{2,60}?)\s*<\/\1>\s*<br\s*\/?>\s*([\s\S]*)$/i);
+    if (!m) return null;
+    const t = headingText(m[2]);
+    if (!isHeadingText(t, true)) return null;
+    const rest = document.createElement('p');
+    rest.innerHTML = m[3];
+    return { title: t, rest: (rest.textContent || '').trim() ? rest : null };
+  }
+
   function blockHTML(el) {
+    // strip decorative <br> runs left at the block edges
+    el.innerHTML = el.innerHTML.replace(/^(?:\s*<br\s*\/?>)+/i, '').replace(/(?:<br\s*\/?>\s*)+$/i, '');
+    const text = (el.textContent || '').trim();
+    // exports bold entire paragraphs — unwrap them so they read as body text
+    if (text.length > 70 && isFullyBold(el)) {
+      const strong = el.querySelector('strong, b');
+      return '<p>' + strong.innerHTML + '</p>';
+    }
+    // lines separated by single <br> are the exports' bullet lists
     const segText = s => { const d = document.createElement('div'); d.innerHTML = s; return (d.textContent || '').trim(); };
     const segs = el.innerHTML.split(/<br\s*\/?>/i).map(s => s.trim()).filter(s => segText(s));
     if (segs.length >= 3 && segs.every(s => segText(s).length <= 130)) {
@@ -657,24 +702,44 @@ ${related.length === 0 ? `
     const doc = new DOMParser().parseFromString('<div id="dr">' + normalizeVendorHtml(html) + '</div>', 'text/html');
     const sections = [];
     let current = { title: '', parts: [] };
+    function startSection(title) {
+      if (MODULE_SUB.test(title) && (current.parts.length || current.title)) {
+        current.parts.push('<h4 class="desc-subhead">' + esc(title) + '</h4>');
+        return;
+      }
+      if (current.parts.length) sections.push(current);
+      current = { title: title, parts: [] };
+    }
     Array.prototype.forEach.call(doc.getElementById('dr').childNodes, node => {
       if (node.nodeType === 3) {
         const t = node.textContent.trim();
-        if (t) current.parts.push('<p>' + esc(t) + '</p>');
+        if (!t) return;
+        if (isHeadingText(headingText(t), false)) startSection(headingText(t));
+        else current.parts.push('<p>' + esc(t) + '</p>');
         return;
       }
       if (node.nodeType !== 1) return;
       const text = (node.textContent || '').trim();
       if (!text && !node.querySelector('img')) return;
-      if (isHeadingBlock(node)) {
-        if (current.parts.length) sections.push(current);
-        current = { title: text.replace(/[:\s]+$/, ''), parts: [] };
-      } else {
-        current.parts.push(blockHTML(node));
+      if (isHeadingBlock(node)) { startSection(headingText(text)); return; }
+      const lead = splitLeadingHeading(node);
+      if (lead) {
+        startSection(lead.title);
+        if (lead.rest) current.parts.push(blockHTML(lead.rest));
+        return;
       }
+      current.parts.push(blockHTML(node));
     });
     if (current.parts.length) sections.push(current);
-    return sections;
+    // some exports contain the whole description twice — drop repeats with
+    // the same title and same leading content
+    const seen = {};
+    return sections.filter(s => {
+      const key = (s.title + '|' + plainText(s.parts.join(' ')).slice(0, 80)).toLowerCase();
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
   }
 
   function descriptionHTML(course) {
@@ -686,26 +751,34 @@ ${related.length === 0 ? `
     <div class="section-head" style="margin-bottom:26px">
       <div>
         <span class="eyebrow">Kursusbeskrivelse</span>
-        <h2 class="display" style="margin-top:18px">${esc(course.seo_title || course.title)}</h2>
+        <h2 class="display" style="margin-top:18px;font-size:clamp(1.9rem,3.4vw,2.8rem)">Om kurset</h2>
       </div>
       ${course.product_type ? `<p class="lead">${esc(course.product_type)} fra ${esc(course.supplier_name || 'udbyderen')}</p>` : ''}
     </div>`;
 
+    const clampBlock = (inner, extraClass) => `
+    <div class="desc-clamp${extraClass ? ' ' + extraClass : ''}">
+      ${inner}
+      <div class="desc-fade"></div>
+    </div>
+    <button class="desc-toggle" type="button" data-desc-toggle hidden>Læs mere <span class="arrow">↓</span></button>`;
+
     if (sections.length < 2) {
+      const body = sections.length === 1
+        ? (sections[0].title ? '<h3>' + esc(sections[0].title) + '</h3>' : '') + sections[0].parts.join('')
+        : safeRichHtml(course.body_html);
       return `
 <section class="section-pad wrap" id="beskrivelse">
   <div class="supplier-description reveal">
     ${head}
-    <div class="desc-clamp" id="desc-clamp">
-      <div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>
-      <div class="desc-fade"></div>
-    </div>
-    <button class="desc-toggle" id="desc-toggle" type="button">Læs hele beskrivelsen <span class="arrow">↓</span></button>
+    ${clampBlock(`<div class="supplier-rich-content">${body}</div>`)}
   </div>
 </section>`;
     }
 
     const intro = sections[0].title === '' ? sections.shift() : null;
+    // collapsed by default so the section titles read as a scannable index;
+    // only auto-open the first one when there is no intro text at all
     const items = sections.map((s, i) => `
     <details class="desc-section"${i === 0 && !intro ? ' open' : ''}>
       <summary><span class="ds-title">${esc(s.title || 'Om kurset')}</span><span class="ds-plus"></span></summary>
@@ -716,26 +789,27 @@ ${related.length === 0 ? `
 <section class="section-pad wrap" id="beskrivelse">
   <div class="supplier-description reveal">
     ${head}
-    ${intro ? `<div class="supplier-rich-content desc-intro">${intro.parts.join('')}</div>` : ''}
+    ${intro ? clampBlock(`<div class="supplier-rich-content desc-intro">${intro.parts.join('')}</div>`, 'intro') : ''}
     <div class="desc-sections">${items}</div>
   </div>
 </section>`;
   }
 
   function initDescription() {
-    const clamp  = document.getElementById('desc-clamp');
-    const toggle = document.getElementById('desc-toggle');
-    if (!clamp || !toggle) return;
-    // short descriptions need no clamp at all
-    if (clamp.scrollHeight <= clamp.clientHeight + 60) {
-      clamp.classList.add('expanded');
-      toggle.hidden = true;
-      return;
-    }
-    toggle.addEventListener('click', () => {
-      const on = clamp.classList.toggle('expanded');
-      toggle.innerHTML = on ? 'Vis mindre <span class="arrow">↑</span>' : 'Læs hele beskrivelsen <span class="arrow">↓</span>';
-      if (!on) clamp.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    document.querySelectorAll('.desc-clamp').forEach(clamp => {
+      const toggle = clamp.nextElementSibling;
+      if (!toggle || !toggle.hasAttribute || !toggle.hasAttribute('data-desc-toggle')) return;
+      // short content needs no clamp at all
+      if (clamp.scrollHeight <= clamp.clientHeight + 60) {
+        clamp.classList.add('expanded');
+        return;
+      }
+      toggle.hidden = false;
+      toggle.addEventListener('click', () => {
+        const on = clamp.classList.toggle('expanded');
+        toggle.innerHTML = on ? 'Vis mindre <span class="arrow">↑</span>' : 'Læs mere <span class="arrow">↓</span>';
+        if (!on) clamp.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      });
     });
   }
 

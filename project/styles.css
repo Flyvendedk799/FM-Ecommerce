@@ -535,6 +535,17 @@ section { position: relative; }
 .desc-section summary:hover .ds-plus { border-color: var(--ink); }
 .ds-body { padding: 0 2px 26px; }
 .desc-subhead { font-family: var(--sans); font-size: 15px; font-weight: 750; margin: 22px 0 8px; }
+
+/* short factual sections as a card grid instead of accordion rows */
+.desc-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; max-width: 82ch; margin-top: 20px; }
+.desc-fact-card { background: var(--paper-2); border: 1.5px solid var(--line); border-radius: 16px; padding: 18px; }
+.desc-fact-card h4 { font-family: var(--sans); font-size: 11.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); font-weight: 800; margin-bottom: 9px; }
+.desc-fact-card .dfc-body { font-size: 14px; line-height: 1.6; }
+.desc-fact-card .dfc-body p { margin: 0 0 8px; }
+.desc-fact-card .dfc-body p:last-child { margin-bottom: 0; }
+.desc-fact-card .desc-list { margin: 4px 0 0; }
+.desc-fact-card .desc-list li { padding: 6px 0 6px 24px; font-size: 13.5px; }
+.desc-sections { margin-top: 18px; }
 .desc-list { margin: 10px 0 6px; padding: 0; list-style: none; }
 .desc-list li { position: relative; padding: 9px 0 9px 30px; border-bottom: 1px dashed var(--line); }
 .desc-list li:last-child { border-bottom: none; }

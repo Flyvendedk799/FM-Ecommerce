@@ -653,6 +653,15 @@ ${related.length === 0 ? `
   // section instead of flooding the accordion with one entry per module.
   const MODULE_SUB = /^(modul|module|appendix|dag|del|trin|fase)\s*\d/i;
 
+  // Headings that carry a real section word anywhere in them start a new
+  // top-level section ("Dit udbytte på uddannelsen", "Kursusform ved virtuel
+  // afholdelse"); topic headlines without one ("Diagrammer", "Udskrivning")
+  // stay inside the current section as subheadings.
+  const SECTION_STEM = /(beskrivelse|indledning|udbytte|deltagere?\b|deltagerprofil|målgruppe|indhold|emner?\b|forudsætninger?|eksamen|certificer\w*|underviser\w*|instruktør\w*|praktisk|formål|kursusmål|program\w*|agenda|opbygning|varighed|lærer du|får du|tilmelding|niveau|metoder?\b|materialer?\b|kursusbevis|afholdelse|moduler?\b|forberedelse|udtalelser?|referencer?|økonomisk støtte|sprog|form|pris(er)?\b|datoer?\b|sted(er)?\b|bemærkning\w*)\b/i;
+
+  // Sections that ARE the story rather than a fact: merged into open prose.
+  const NARRATIVE_RE = /^(beskrivelse|indledning|om kurset)\b/i;
+
   function plainText(html) {
     const d = document.createElement('div');
     d.innerHTML = html;
@@ -703,9 +712,11 @@ ${related.length === 0 ? `
     const sections = [];
     let current = { title: '', parts: [] };
     function startSection(title) {
-      if (MODULE_SUB.test(title) && (current.parts.length || current.title)) {
-        current.parts.push('<h4 class="desc-subhead">' + esc(title) + '</h4>');
-        return;
+      if (current.parts.length || current.title) {
+        if (MODULE_SUB.test(title) || !SECTION_STEM.test(title)) {
+          current.parts.push('<h4 class="desc-subhead">' + esc(title) + '</h4>');
+          return;
+        }
       }
       if (current.parts.length) sections.push(current);
       current = { title: title, parts: [] };
@@ -731,12 +742,12 @@ ${related.length === 0 ? `
       current.parts.push(blockHTML(node));
     });
     if (current.parts.length) sections.push(current);
-    // some exports contain the whole description twice — drop repeats with
-    // the same title and same leading content
+    // some exports contain the whole description twice — keep only the first
+    // section carrying a given title
     const seen = {};
     return sections.filter(s => {
-      const key = (s.title + '|' + plainText(s.parts.join(' ')).slice(0, 80)).toLowerCase();
-      if (seen[key]) return false;
+      const key = s.title.trim().toLowerCase();
+      if (key && seen[key]) return false;
       seen[key] = true;
       return true;
     });
@@ -763,34 +774,61 @@ ${related.length === 0 ? `
     </div>
     <button class="desc-toggle" type="button" data-desc-toggle hidden>Læs mere <span class="arrow">↓</span></button>`;
 
-    if (sections.length < 2) {
-      const body = sections.length === 1
-        ? (sections[0].title ? '<h3>' + esc(sections[0].title) + '</h3>' : '') + sections[0].parts.join('')
-        : safeRichHtml(course.body_html);
+    if (!sections.length) {
       return `
 <section class="section-pad wrap" id="beskrivelse">
   <div class="supplier-description reveal">
     ${head}
-    ${clampBlock(`<div class="supplier-rich-content">${body}</div>`)}
+    ${clampBlock(`<div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>`, 'intro')}
   </div>
 </section>`;
     }
 
-    const intro = sections[0].title === '' ? sections.shift() : null;
-    // collapsed by default so the section titles read as a scannable index;
-    // only auto-open the first one when there is no intro text at all
-    const items = sections.map((s, i) => `
-    <details class="desc-section"${i === 0 && !intro ? ' open' : ''}>
+    // The story reads as open prose: the untitled intro, leading
+    // Beskrivelse/Indledning sections — or, failing both, the supplier's own
+    // lead headline section (its title kept as an in-flow heading).
+    const narrative = [];
+    if (sections[0].title === '') narrative.push(sections.shift());
+    while (sections.length && (NARRATIVE_RE.test(sections[0].title) || !narrative.length)) {
+      const s = sections.shift();
+      if (s.title && !NARRATIVE_RE.test(s.title)) s.parts.unshift('<h3>' + esc(s.title) + '</h3>');
+      narrative.push(s);
+    }
+
+    // Short factual sections become scannable cards; only the genuinely long
+    // ones (content outlines, module lists) stay collapsible.
+    const factish = [], deep = [];
+    sections.forEach(s => {
+      const joined = s.parts.join('');
+      const textLen = plainText(joined).length;
+      const listItems = (joined.match(/<li>/gi) || []).length;
+      if (textLen <= 380 && listItems <= 4 && joined.indexOf('desc-subhead') < 0) factish.push(s);
+      else deep.push(s);
+    });
+
+    const proseHTML = narrative.map(s => s.parts.join('')).join('');
+    const factCardsHTML = factish.length ? `
+    <div class="desc-facts">${factish.map(s => `
+      <div class="desc-fact-card">
+        <h4>${esc(s.title)}</h4>
+        <div class="dfc-body supplier-rich-content">${s.parts.join('')}</div>
+      </div>`).join('')}
+    </div>` : '';
+    const deepHTML = deep.length ? `
+    <div class="desc-sections">${deep.map((s, i) => `
+    <details class="desc-section"${!proseHTML && !factCardsHTML && i === 0 ? ' open' : ''}>
       <summary><span class="ds-title">${esc(s.title || 'Om kurset')}</span><span class="ds-plus"></span></summary>
       <div class="ds-body supplier-rich-content">${s.parts.join('')}</div>
-    </details>`).join('');
+    </details>`).join('')}
+    </div>` : '';
 
     return `
 <section class="section-pad wrap" id="beskrivelse">
   <div class="supplier-description reveal">
     ${head}
-    ${intro ? clampBlock(`<div class="supplier-rich-content desc-intro">${intro.parts.join('')}</div>`, 'intro') : ''}
-    <div class="desc-sections">${items}</div>
+    ${proseHTML ? clampBlock(`<div class="supplier-rich-content desc-intro">${proseHTML}</div>`, 'intro') : ''}
+    ${factCardsHTML}
+    ${deepHTML}
   </div>
 </section>`;
   }

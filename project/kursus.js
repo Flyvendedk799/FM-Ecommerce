@@ -662,6 +662,29 @@ ${related.length === 0 ? `
   // Sections that ARE the story rather than a fact: merged into open prose.
   const NARRATIVE_RE = /^(beskrivelse|indledning|om kurset)\b/i;
 
+  // Icon per fact-card type, first match wins (feather-style strokes).
+  const FACT_ICONS = [
+    [/målgruppe|deltager/i, '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>'],
+    [/forudsætning|forberedelse/i, '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'],
+    [/kursusmål|formål|udbytte|lærer du|får du/i, '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'],
+    [/eksamen|certificer|kursusbevis/i, '<circle cx="12" cy="8" r="6"/><path d="m15.5 13 1.5 8-5-3-5 3 1.5-8"/>'],
+    [/materiale/i, '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>'],
+    [/underviser|instruktør/i, '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'],
+    [/varighed|opbygning/i, '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'],
+    [/sted|afholdelse|lokation/i, '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>'],
+    [/pris|økonomisk|støtte/i, '<path d="M20.59 13.41 12 22 2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/>'],
+    [/dato|tilmelding/i, '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/>'],
+    [/sprog/i, '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20 15.3 15.3 0 0 1 0-20z"/>'],
+    [/niveau/i, '<path d="M6 20V10M12 20V4M18 20v-6"/>'],
+    [/form|metode|undervisning/i, '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'],
+  ];
+
+  function factIcon(title) {
+    const hit = FACT_ICONS.find(pair => pair[0].test(title));
+    const paths = hit ? hit[1] : '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + paths + '</svg>';
+  }
+
   function plainText(html) {
     const d = document.createElement('div');
     d.innerHTML = html;
@@ -742,15 +765,39 @@ ${related.length === 0 ? `
       current.parts.push(blockHTML(node));
     });
     if (current.parts.length) sections.push(current);
-    // some exports contain the whole description twice — keep only the first
-    // section carrying a given title
-    const seen = {};
-    return sections.filter(s => {
-      const key = s.title.trim().toLowerCase();
-      if (key && seen[key]) return false;
-      seen[key] = true;
+    // some exports contain the whole description twice — drop later sections
+    // repeating an earlier title OR an earlier section's content (the copies
+    // sometimes carry slightly different titles over identical text)
+    const seenTitle = {}, seenContent = {};
+    return truncateRepeatedCopy(sections).filter(s => {
+      const t = s.title.trim().toLowerCase();
+      const c = plainText(s.parts.join(' ')).slice(0, 140).toLowerCase();
+      if ((t && seenTitle[t]) || (c.length > 60 && seenContent[c])) return false;
+      if (t) seenTitle[t] = true;
+      if (c.length > 60) seenContent[c] = true;
       return true;
     });
+  }
+
+  // Several exports append a REWRITTEN second copy of the whole description,
+  // which the content dedupe can't match. The tell is section titles starting
+  // to repeat: when 2+ repeats occur from some point on, everything from the
+  // first repeat is the stale copy — cut it.
+  function truncateRepeatedCopy(sections) {
+    const seen = {};
+    let cut = -1;
+    for (let i = 0; i < sections.length; i++) {
+      const t = sections[i].title.trim().toLowerCase();
+      if (t && seen[t]) { cut = i; break; }
+      if (t) seen[t] = true;
+    }
+    if (cut < 0) return sections;
+    let dups = 0;
+    for (let i = cut; i < sections.length; i++) {
+      const t = sections[i].title.trim().toLowerCase();
+      if (t && seen[t]) dups++;
+    }
+    return dups >= 2 ? sections.slice(0, cut) : sections;
   }
 
   function descriptionHTML(course) {
@@ -774,12 +821,19 @@ ${related.length === 0 ? `
     </div>
     <button class="desc-toggle" type="button" data-desc-toggle hidden>Læs mere <span class="arrow">↓</span></button>`;
 
+    const ctaHTML = `
+    <div class="desc-cta">
+      <button class="btn-book" data-scroll="#datoer">Se datoer og book <span class="arrow">→</span></button>
+      <span class="desc-cta-note">Gratis afbestilling indtil 14 dage før</span>
+    </div>`;
+
     if (!sections.length) {
       return `
 <section class="section-pad wrap" id="beskrivelse">
   <div class="supplier-description reveal">
     ${head}
     ${clampBlock(`<div class="supplier-rich-content">${safeRichHtml(course.body_html)}</div>`, 'intro')}
+    ${ctaHTML}
   </div>
 </section>`;
     }
@@ -810,7 +864,7 @@ ${related.length === 0 ? `
     const factCardsHTML = factish.length ? `
     <div class="desc-facts">${factish.map(s => `
       <div class="desc-fact-card">
-        <h4>${esc(s.title)}</h4>
+        <h4><span class="dfc-ic">${factIcon(s.title)}</span>${esc(s.title)}</h4>
         <div class="dfc-body supplier-rich-content">${s.parts.join('')}</div>
       </div>`).join('')}
     </div>` : '';
@@ -829,6 +883,7 @@ ${related.length === 0 ? `
     ${proseHTML ? clampBlock(`<div class="supplier-rich-content desc-intro">${proseHTML}</div>`, 'intro') : ''}
     ${factCardsHTML}
     ${deepHTML}
+    ${ctaHTML}
   </div>
 </section>`;
   }

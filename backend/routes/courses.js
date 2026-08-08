@@ -4,17 +4,27 @@ const db = require('../db');
 const requireAdmin = require('../middleware/requireAdmin');
 const wrapAsync = require('../middleware/wrapAsync');
 const { importShopifyCsv } = require('../import/shopifyCsv');
-const { httpError, statusOrDefault, statusStrict, intInRange, numInRange, jsonArray, todayISO } = require('../validate');
+const { httpError, statusOrDefault, statusStrict, intInRange, numInRange, jsonArray, imageList, todayISO } = require('../validate');
 
 /* ---- auth: reads are public; writes are admin ---- */
 router.use((req, res, next) => (req.method === 'GET' ? next() : requireAdmin(req, res, next)));
 
 const JSON_COLS = ['outcomes', 'curriculum', 'included', 'facts', 'marquee_items', 'materials', 'bring_items'];
+// `images` is JSON on the way out too, but writes run through imageList()
+// instead of the generic jsonArray() so a gallery can never carry an unsafe src.
+const READ_JSON_COLS = JSON_COLS.concat('images');
 const OBJECT_COLS = ['shopify_product_data'];
+
+// The shop reads `images` as the gallery and falls back to the single
+// image_src, so a row that only has the legacy field still renders one shot.
+function galleryFor(row) {
+  if (Array.isArray(row.images) && row.images.length) return row.images;
+  return row.image_src ? [{ src: row.image_src, alt: row.image_alt_text || '' }] : [];
+}
 
 function parseJSON(row) {
   if (!row) return row;
-  JSON_COLS.forEach(col => {
+  READ_JSON_COLS.forEach(col => {
     if (row[col] && typeof row[col] === 'string') {
       try { row[col] = JSON.parse(row[col]); } catch { row[col] = []; }
     }
@@ -24,6 +34,7 @@ function parseJSON(row) {
       try { row[col] = JSON.parse(row[col]); } catch { row[col] = {}; }
     }
   });
+  row.images = galleryFor(row);
   return row;
 }
 
@@ -121,6 +132,10 @@ router.post('/', wrapAsync(async (req, res) => {
     seo_description = '', shopify_product_data = {}
   } = req.body;
   if (!title) return res.status(400).json({ error: 'title is required' });
+  const images = imageList(req.body.images);
+  // an explicit gallery always wins over a stale single image field
+  const primarySrc = images.length ? images[0].src : image_src;
+  const primaryAlt = images.length ? (images[0].alt || image_alt_text) : image_alt_text;
   const price        = intInRange(req.body.price, { min: 0, max: 10_000_000, field: 'price', def: 0 });
   const rating       = numInRange(req.body.rating, { min: 0, max: 5, field: 'rating', def: 0 });
   const review_count = intInRange(req.body.review_count, { min: 0, max: 10_000_000, field: 'review_count', def: 0 });
@@ -129,14 +144,14 @@ router.post('/', wrapAsync(async (req, res) => {
   const slug = slugify(title);
   const result = await db.run(`
     INSERT INTO courses (title, slug, source, source_handle, product_type, tags, published,
-      body_html, image_src, image_alt_text, seo_title, seo_description, shopify_product_data,
+      body_html, image_src, image_alt_text, images, seo_title, seo_description, shopify_product_data,
       supplier_id, category_id, price, price_label, price_note,
       format, duration, is_online, rating, review_count, description, short_description,
       outcomes, curriculum, included, facts, marquee_items, materials, bring_items,
       preset_type, badge, color, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, title, slug, source, source_handle, product_type, tags, published,
-    body_html, image_src, image_alt_text, seo_title, seo_description,
+    body_html, primarySrc, primaryAlt, JSON.stringify(images), seo_title, seo_description,
     JSON.stringify(shopify_product_data || {}),
     supplier_id || null, category_id || null, price, price_label, price_note,
     format, duration, is_online ? 1 : 0, rating, review_count, description, short_description,
@@ -165,13 +180,23 @@ router.put('/:id', wrapAsync(async (req, res) => {
   JSON_COLS.forEach(col => {
     if (body[col] !== undefined) merged[col] = jsonArray(body[col]);
   });
+  if (body.images !== undefined) {
+    const images = imageList(body.images);
+    merged.images = JSON.stringify(images);
+    // The gallery is the source of truth once it is sent: keep the legacy
+    // single-image fields on its lead shot, and clear them when the gallery is
+    // emptied so the shop doesn't keep falling back to a removed image.
+    // An explicit image_src/alt in the same request still wins.
+    if (body.image_src === undefined) merged.image_src = images.length ? images[0].src : '';
+    if (body.image_alt_text === undefined) merged.image_alt_text = images.length ? (images[0].alt || merged.image_alt_text) : '';
+  }
   if (body.shopify_product_data !== undefined) {
     merged.shopify_product_data = JSON.stringify(body.shopify_product_data || {});
   }
   if (body.title && body.title !== existing.title) merged.slug = slugify(body.title);
   await db.run(`
     UPDATE courses SET title=?, slug=?, source=?, source_handle=?, product_type=?, tags=?,
-      published=?, body_html=?, image_src=?, image_alt_text=?, seo_title=?,
+      published=?, body_html=?, image_src=?, image_alt_text=?, images=?, seo_title=?,
       seo_description=?, shopify_product_data=?, supplier_id=?, category_id=?, price=?, price_label=?,
       price_note=?, format=?, duration=?, is_online=?, rating=?, review_count=?, description=?,
       short_description=?, outcomes=?, curriculum=?, included=?, facts=?, marquee_items=?,
@@ -179,7 +204,7 @@ router.put('/:id', wrapAsync(async (req, res) => {
     WHERE id=?
   `, merged.title, merged.slug, merged.source, merged.source_handle, merged.product_type,
     merged.tags, merged.published ? 1 : 0, merged.body_html, merged.image_src,
-    merged.image_alt_text, merged.seo_title, merged.seo_description,
+    merged.image_alt_text, merged.images, merged.seo_title, merged.seo_description,
     merged.shopify_product_data, merged.supplier_id, merged.category_id, merged.price,
     merged.price_label, merged.price_note, merged.format, merged.duration,
     merged.is_online ? 1 : 0, merged.rating, merged.review_count, merged.description,

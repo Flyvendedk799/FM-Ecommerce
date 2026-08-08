@@ -1,5 +1,5 @@
 const { parse } = require('csv-parse/sync');
-const { todayISO } = require('../validate');
+const { todayISO, imageList } = require('../validate');
 
 const PRODUCT_FIELDS = new Set([
   'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published',
@@ -263,6 +263,34 @@ async function upsertSupplier(tx, name) {
   return result.lastInsertRowid;
 }
 
+/* A Shopify export spreads a product's gallery across its handle's rows: the
+   first row carries the product columns, the rest are image-only rows holding
+   just Image Src / Image Position / Image Alt Text. Walk every row of the
+   group so the whole gallery survives the import — ordered by Image Position,
+   with variant images appended last since they repeat product shots more
+   often than they add new ones. imageList() dedupes and drops unsafe srcs. */
+function collectImages(rows) {
+  const gallery = [];
+  const variantImages = [];
+  rows.forEach((row, index) => {
+    const src = clean(row['Image Src'], 1200);
+    if (src) {
+      const position = Number(clean(row['Image Position'], 12));
+      gallery.push({
+        src,
+        alt: clean(row['Image Alt Text'], 260),
+        // rows without a usable position keep their file order, after the
+        // numbered ones
+        position: Number.isFinite(position) && position > 0 ? position : 1000 + index,
+      });
+    }
+    const variantSrc = clean(row['Variant Image'], 1200);
+    if (variantSrc) variantImages.push({ src: variantSrc, alt: '', position: 2000 + index });
+  });
+  gallery.sort((a, b) => a.position - b.position);
+  return imageList(gallery.concat(variantImages));
+}
+
 function buildCoursePayload(productRow, variants, categories, sourceStamp) {
   const title = clean(productRow.Title, 260) || clean(productRow.Handle, 260);
   const categoryKey = classifyCategory(productRow);
@@ -287,6 +315,8 @@ function buildCoursePayload(productRow, variants, categories, sourceStamp) {
   ];
   const marquee = [title]
     .concat(tags.split(',').map(t => clean(t, 60)).filter(t => t && !/^no-index$/i.test(t)).slice(0, 5));
+  const images = collectImages(variants);
+  const primaryImage = images[0] || null;
 
   return {
     title,
@@ -296,8 +326,11 @@ function buildCoursePayload(productRow, variants, categories, sourceStamp) {
     tags,
     published: boolish(productRow.Published) ? 1 : 0,
     body_html: bodyHtml,
-    image_src: clean(productRow['Image Src'], 1200),
-    image_alt_text: clean(productRow['Image Alt Text'], 260),
+    // image_src stays the gallery's lead shot so every consumer that only
+    // knows about the single-image world keeps working
+    image_src: primaryImage ? primaryImage.src : clean(productRow['Image Src'], 1200),
+    image_alt_text: (primaryImage && primaryImage.alt) || clean(productRow['Image Alt Text'], 260),
+    images: JSON.stringify(images),
     seo_title: clean(productRow['SEO Title'], 260),
     seo_description: clean(productRow['SEO Description'], 500),
     shopify_product_data: JSON.stringify(productData(productRow)),
@@ -340,7 +373,7 @@ async function upsertCourse(tx, payload) {
   if (existing) {
     await tx.run(`
       UPDATE courses SET title=?, source=?, source_handle=?, product_type=?, tags=?, published=?,
-        body_html=?, image_src=?, image_alt_text=?, seo_title=?, seo_description=?,
+        body_html=?, image_src=?, image_alt_text=?, images=?, seo_title=?, seo_description=?,
         shopify_product_data=?, last_imported_at=?, supplier_id=?, category_id=?,
         price=?, price_label=?, price_note=?, format=?, duration=?, is_online=?,
         description=?, short_description=?, included=?, facts=?, marquee_items=?,
@@ -349,7 +382,7 @@ async function upsertCourse(tx, payload) {
     `,
       payload.title, payload.source, payload.source_handle, payload.product_type, payload.tags,
       payload.published, payload.body_html, payload.image_src, payload.image_alt_text,
-      payload.seo_title, payload.seo_description, payload.shopify_product_data,
+      payload.images, payload.seo_title, payload.seo_description, payload.shopify_product_data,
       payload.last_imported_at, payload.supplier_id, payload.category_id, payload.price,
       payload.price_label, payload.price_note, payload.format, payload.duration,
       payload.is_online, payload.description, payload.short_description, payload.included,
@@ -361,17 +394,17 @@ async function upsertCourse(tx, payload) {
   const result = await tx.run(`
     INSERT INTO courses (
       title, slug, source, source_handle, product_type, tags, published, body_html,
-      image_src, image_alt_text, seo_title, seo_description, shopify_product_data,
+      image_src, image_alt_text, images, seo_title, seo_description, shopify_product_data,
       last_imported_at, supplier_id, category_id, price, price_label, price_note,
       format, duration, is_online, rating, review_count, description, short_description,
       outcomes, curriculum, included, facts, marquee_items, materials, bring_items,
       preset_type, badge, color, status
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     payload.title, payload.source_handle || null, payload.source, payload.source_handle,
     payload.product_type, payload.tags, payload.published, payload.body_html,
-    payload.image_src, payload.image_alt_text, payload.seo_title, payload.seo_description,
+    payload.image_src, payload.image_alt_text, payload.images, payload.seo_title, payload.seo_description,
     payload.shopify_product_data, payload.last_imported_at, payload.supplier_id,
     payload.category_id, payload.price, payload.price_label, payload.price_note,
     payload.format, payload.duration, payload.is_online, payload.rating,
@@ -573,6 +606,7 @@ async function importShopifyCsv(store, csvText, options = {}) {
 
 module.exports = {
   importShopifyCsv,
+  collectImages,
   parseDanishDateRange,
   parseSourceDateFromFile,
   sanitizeHtml,

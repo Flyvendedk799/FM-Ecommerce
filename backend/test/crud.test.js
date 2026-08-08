@@ -185,3 +185,56 @@ test('GET /api/bookings/stats/summary matches the stats shape (admin)', async ()
   assert.ok('total_courses' in r.body);
   assert.ok('total_bookings' in r.body);
 });
+
+/* ---- Course gallery: write, read-back and src safety ---- */
+test('course gallery round-trips and drops unsafe sources', async () => {
+  const created = await j('/api/courses', jsonReq('POST', {
+    title: 'Galleri Kursus',
+    images: [
+      'https://cdn.example.com/en.jpg',
+      { src: 'https://cdn.example.com/to.jpg', alt: 'To' },
+      { src: 'javascript:alert(1)', alt: 'ond' },
+      { src: 'https://cdn.example.com/en.jpg', alt: 'dublet' },
+      { src: '', alt: 'tom' },
+    ],
+  }, true));
+  assert.strictEqual(created.status, 201);
+
+  const got = await j('/api/courses/' + created.body.id);
+  assert.deepStrictEqual(got.body.images, [
+    { src: 'https://cdn.example.com/en.jpg', alt: '' },
+    { src: 'https://cdn.example.com/to.jpg', alt: 'To' },
+  ]);
+  // the gallery's lead shot fills the legacy single-image fields
+  assert.strictEqual(got.body.image_src, 'https://cdn.example.com/en.jpg');
+
+  // reordering through PUT moves the lead shot with it
+  const put = await j('/api/courses/' + created.body.id, jsonReq('PUT', {
+    images: [{ src: 'https://cdn.example.com/to.jpg', alt: 'To' }],
+  }, true));
+  assert.strictEqual(put.status, 200);
+  const after = await j('/api/courses/' + created.body.id);
+  assert.strictEqual(after.body.images.length, 1);
+  assert.strictEqual(after.body.image_src, 'https://cdn.example.com/to.jpg');
+
+  // clearing the gallery clears the fallback too, so no removed image lingers
+  await j('/api/courses/' + created.body.id, jsonReq('PUT', { images: [] }, true));
+  const cleared = await j('/api/courses/' + created.body.id);
+  assert.deepStrictEqual(cleared.body.images, []);
+  assert.strictEqual(cleared.body.image_src, '');
+
+  await j('/api/courses/' + created.body.id, { method: 'DELETE', headers: ADMIN });
+});
+
+test('a course with only the legacy image_src still reports a one-image gallery', async () => {
+  const created = await j('/api/courses', jsonReq('POST', {
+    title: 'Ét billede',
+    image_src: 'https://cdn.example.com/solo.jpg',
+    image_alt_text: 'Solo',
+  }, true));
+  const got = await j('/api/courses/' + created.body.id);
+  assert.deepStrictEqual(got.body.images, [
+    { src: 'https://cdn.example.com/solo.jpg', alt: 'Solo' },
+  ]);
+  await j('/api/courses/' + created.body.id, { method: 'DELETE', headers: ADMIN });
+});

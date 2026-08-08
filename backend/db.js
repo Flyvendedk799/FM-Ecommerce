@@ -182,6 +182,7 @@ function schemaSql(isPg) {
     body_html TEXT DEFAULT '',
     image_src TEXT DEFAULT '',
     image_alt_text TEXT DEFAULT '',
+    images TEXT DEFAULT '[]',
     seo_title TEXT DEFAULT '',
     seo_description TEXT DEFAULT '',
     shopify_product_data TEXT DEFAULT '{}',
@@ -381,6 +382,9 @@ async function migrate(x) {
     await ensureColumn(x, 'courses', col, def);
   }
   await ensureColumn(x, 'courses', 'published', 'INTEGER DEFAULT 1');
+  // Gallery: rows predating it keep their single image_src, which the shop
+  // still falls back to when `images` is empty.
+  await ensureColumn(x, 'courses', 'images', "TEXT DEFAULT '[]'");
 
   const sessionTextCols = [
     'end_date', 'date_text', 'source_variant_sku', 'option1_name', 'option1_value',

@@ -119,6 +119,22 @@
   </div>
 </div>
 
+<!-- Image lightbox -->
+<div class="lightbox" id="lightbox" hidden>
+  <div class="lightbox-inner" role="dialog" aria-modal="true" aria-label="Kursusbilleder">
+    <button class="lb-close" data-lb-close aria-label="Luk" id="lb-close">×</button>
+    <button class="lb-nav prev" data-lb-step="-1" aria-label="Forrige billede">‹</button>
+    <figure class="lb-figure">
+      <img id="lb-img" src="" alt="">
+      <figcaption class="lb-caption">
+        <span id="lb-caption-text"></span>
+        <span class="lb-count" id="lb-count"></span>
+      </figcaption>
+    </figure>
+    <button class="lb-nav next" data-lb-step="1" aria-label="Næste billede">›</button>
+  </div>
+</div>
+
 <!-- Booking modal -->
 <div class="booking-overlay" id="booking-overlay" hidden>
   <div class="booking-modal" role="dialog" aria-modal="true" aria-labelledby="bm-title">
@@ -228,6 +244,7 @@
 </div>
 
 <script src="image-slot.js"></script>
+<script src="card-media.js"></script>
 <script src="account.js"></script>
 <script src="search.js"></script>
 <script src="cart.js"></script>

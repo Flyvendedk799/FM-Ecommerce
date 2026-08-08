@@ -285,15 +285,20 @@
             ? 'kr. ' + (+c.price).toLocaleString('da-DK') + '<small> ekskl. moms</small>'
             : '<span style="color:var(--accent)">Pris på forespørgsel</span>';
           const d = i ? ' reveal-d' + i : '';
+          // card-media.js decides cover-vs-contain once the image decodes
           const img = c.image_src
-            ? '<img class="rc-img" src="' + esc(c.image_src) + '" alt="" loading="lazy" onerror="this.closest(&quot;.rc-top&quot;).classList.remove(&quot;has-img&quot;)">'
+            ? '<img class="card-img" src="' + esc(c.image_src) + '" alt="" loading="lazy">'
             : '';
+          const monogram = window.FMCardMedia ? window.FMCardMedia.monogram(c.title) : '';
           return '<a class="rc-card reveal' + d + '" href="kursus.html?id=' + (+c.id) + '">' +
-            '<div class="rc-top' + (c.image_src ? ' has-img' : '') + '" style="background:' + safeColor(c.color) + '">' +
+            '<div class="card-media' + (c.image_src ? ' has-img' : '') + '" data-card-media style="--card-tint:' + safeColor(c.color) + '">' +
               img +
-              '<span class="rc-cat">' + esc(shortCat) + '</span>' +
-              '<span class="rc-rating">' + esc(dateLabel) + '</span>' +
-              '<span class="rc-go">→</span>' +
+              '<span class="card-monogram" aria-hidden="true">' + esc(monogram) + '</span>' +
+              '<div class="cm-row">' +
+                '<span class="cm-chip">' + esc(shortCat) + '</span>' +
+                '<span class="cm-signal">' + esc(dateLabel) + '</span>' +
+              '</div>' +
+              '<span class="rc-go" aria-hidden="true">→</span>' +
             '</div>' +
             '<div class="rc-body">' +
               '<h3 class="rc-title">' + esc(c.title) + '</h3>' +
@@ -305,6 +310,8 @@
             '</div>' +
           '</a>';
         }).join('');
+
+        if (window.FMCardMedia) window.FMCardMedia.enhance(grid);
 
         // reveal the freshly-injected cards (the global observer captured the old list)
         grid.querySelectorAll('.reveal').forEach((r, i) => {

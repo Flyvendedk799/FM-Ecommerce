@@ -65,6 +65,36 @@ function jsonArray(value) {
   return Array.isArray(value) ? JSON.stringify(value) : '[]';
 }
 
+/* ---- course gallery ----
+   Accepts ['https://…'] or [{ src, alt, position }] and returns a clean
+   [{ src, alt }] array: absolute http(s), protocol-relative and site-relative
+   sources only (a javascript:/data: src would run or bloat in the shop),
+   deduped on src, order preserved, capped so one bad import can't
+   balloon a row. */
+const MAX_IMAGES = 24;
+
+function isSafeImageSrc(src) {
+  if (!src || src.length > 1200) return false;
+  if (/^\s*(javascript|data|vbscript):/i.test(src)) return false;
+  return /^(https?:)?\/\//i.test(src) || /^\/[^/]/.test(src) || /^[\w.-]+\/[^\s]*$/.test(src);
+}
+
+function imageList(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const entry of value) {
+    const raw = typeof entry === 'string' ? { src: entry } : (entry && typeof entry === 'object' ? entry : null);
+    if (!raw) continue;
+    const src = String(raw.src == null ? '' : raw.src).trim();
+    if (!isSafeImageSrc(src) || seen.has(src)) continue;
+    seen.add(src);
+    out.push({ src, alt: String(raw.alt == null ? '' : raw.alt).trim().slice(0, 260) });
+    if (out.length >= MAX_IMAGES) break;
+  }
+  return out;
+}
+
 function isEmail(s) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || ''));
 }
@@ -83,5 +113,6 @@ function todayISO() {
 
 module.exports = {
   httpError, STATUS, statusOrDefault, statusStrict,
-  intInRange, numInRange, jsonArray, isEmail, isISODate, todayISO,
+  intInRange, numInRange, jsonArray, imageList, isSafeImageSrc,
+  isEmail, isISODate, todayISO, MAX_IMAGES,
 };

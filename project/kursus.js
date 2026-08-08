@@ -31,6 +31,7 @@
       .replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, ' $1="#"');
   }
   function safeColor(v){ return /^#[0-9a-fA-F]{3,8}$/.test(String(v||'')) ? v : '#2C1A0A'; }
+  function monogram(title){ return window.FMCardMedia ? window.FMCardMedia.monogram(title) : ''; }
 
   function fmtDateFull(dateStr) {
     if (!dateStr) return '';
@@ -203,6 +204,8 @@
     initCurriculum();
     initCartActions(course);
     initBookingModal(course);
+    initGallery(course);
+    if (window.FMCardMedia) window.FMCardMedia.enhance(contentEl);
     initParallax();
     initRailFill();
     initNotify(course);
@@ -210,6 +213,78 @@
     // Breadcrumb back link
     const bcBack = document.getElementById('breadcrumb-back');
     if (bcBack) bcBack.addEventListener('click', e => { e.preventDefault(); history.back(); });
+  }
+
+  /* ============================================================
+     GALLERY
+     Suppliers ship anything from one logo to a full photo set. The API
+     returns the whole gallery in `images` and still fills it from the
+     legacy single `image_src` for rows imported before galleries existed,
+     so this only has to normalise the shape.
+  ============================================================ */
+  function galleryImages(course) {
+    const raw = Array.isArray(course.images) ? course.images : [];
+    const seen = {};
+    const out = [];
+    raw.forEach(entry => {
+      const item = typeof entry === 'string' ? { src: entry } : (entry || {});
+      const src = String(item.src || '').trim();
+      if (!src || seen[src]) return;
+      seen[src] = true;
+      out.push({ src, alt: String(item.alt || '').trim() });
+    });
+    if (!out.length && course.image_src) {
+      out.push({ src: course.image_src, alt: course.image_alt_text || '' });
+    }
+    return out;
+  }
+
+  function galleryHTML(course) {
+    const images = galleryImages(course);
+    const durationTag = `
+        <div class="hero-media-tag">
+          <span class="chip accent"><span class="dot" style="background:var(--on-accent)"></span>${esc(course.duration || '1 dag')}</span>
+        </div>`;
+
+    if (!images.length) {
+      return `
+      <div class="hero-media" data-parallax>
+        <image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>
+        ${durationTag}
+      </div>`;
+    }
+
+    const first = images[0];
+    const multi = images.length > 1;
+    const thumbs = multi ? `
+      <div class="gallery-thumbs" role="tablist" aria-label="Kursusbilleder">
+        ${images.map((img, i) => `
+        <button type="button" class="gallery-thumb${i === 0 ? ' is-active' : ''}" role="tab"
+                aria-selected="${i === 0 ? 'true' : 'false'}" aria-label="Billede ${i + 1} af ${images.length}" data-gallery-index="${i}">
+          <img src="${esc(img.src)}" alt="" loading="lazy">
+        </button>`).join('')}
+      </div>` : '';
+
+    return `
+      <div class="gallery" id="course-gallery">
+        <div class="hero-media${multi ? ' has-thumbs' : ''}" data-parallax>
+          <img class="hero-media-backdrop" id="gallery-backdrop" src="${esc(first.src)}" alt="" aria-hidden="true">
+          <button type="button" class="gallery-stage" id="gallery-stage" aria-label="Åbn billedet i fuld størrelse">
+            <img class="hero-course-img" id="gallery-main" src="${esc(first.src)}"
+                 alt="${esc(first.alt || course.image_alt_text || course.title)}" loading="eager"
+                 onerror="this.closest('.hero-media').classList.add('img-failed')">
+            <span class="gallery-zoom" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M11 8v6M8 11h6"/></svg>
+            </span>
+          </button>
+          ${multi ? `
+          <button type="button" class="gallery-nav prev" data-gallery-step="-1" aria-label="Forrige billede">‹</button>
+          <button type="button" class="gallery-nav next" data-gallery-step="1" aria-label="Næste billede">›</button>
+          <div class="gallery-count" id="gallery-count" aria-hidden="true">1 / ${images.length}</div>` : ''}
+          ${durationTag}
+        </div>
+        ${thumbs}
+      </div>`;
   }
 
   /* ============================================================
@@ -289,15 +364,7 @@
     </div>
 
     <aside class="hero-aside reveal reveal-d2 is-in">
-      <div class="hero-media" data-parallax>
-        ${course.image_src
-          ? `<img class="hero-media-backdrop" src="${esc(course.image_src)}" alt="" aria-hidden="true">
-             <img class="hero-course-img" src="${esc(course.image_src)}" alt="${esc(course.image_alt_text || course.title)}" loading="eager" onerror="this.closest('.hero-media').classList.add('img-failed')">`
-          : '<image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>'}
-        <div class="hero-media-tag">
-          <span class="chip accent"><span class="dot" style="background:var(--on-accent)"></span>${esc(course.duration || '1 dag')}</span>
-        </div>
-      </div>
+      ${galleryHTML(course)}
     </aside>
   </div>
 
@@ -544,10 +611,13 @@ ${related.length > 0 ? `
   <div class="related-grid reveal reveal-d1">
     ${related.map(r => `
     <a class="rc-card" href="kursus.html?id=${+r.id}">
-      <div class="rc-top${r.image_src ? ' has-img' : ''}" style="background:${safeColor(r.color)}">
-        ${r.image_src ? `<img class="rc-img" src="${esc(r.image_src)}" alt="" loading="lazy" onerror="this.closest('.rc-top').classList.remove('has-img')">` : ''}
-        <span class="rc-cat">${esc((r.category_label||'').split(' ')[0])}</span>
-        <span class="rc-rating"><span class="rc-star">★</span> ${r.rating?(+r.rating).toFixed(1).replace('.',','):'—'}</span>
+      <div class="card-media${r.image_src ? ' has-img' : ''}" data-card-media style="--card-tint:${safeColor(r.color)}">
+        ${r.image_src ? `<img class="card-img" src="${esc(r.image_src)}" alt="" loading="lazy">` : ''}
+        <span class="card-monogram" aria-hidden="true">${esc(monogram(r.title))}</span>
+        <div class="cm-row">
+          <span class="cm-chip">${esc((r.category_label||'').split(' ')[0])}</span>
+          ${r.rating ? `<span class="cm-signal"><span class="cm-star">★</span>${(+r.rating).toFixed(1).replace('.',',')}</span>` : ''}
+        </div>
         <span class="rc-go" aria-hidden="true">→</span>
       </div>
       <div class="rc-body">
@@ -1170,6 +1240,125 @@ ${related.length === 0 ? `
         raf = null;
       });
     }, { passive: true });
+  }
+
+  /* ============================================================
+     GALLERY + LIGHTBOX
+  ============================================================ */
+  function initGallery(course) {
+    const images = galleryImages(course);
+    const root = document.getElementById('course-gallery');
+    if (!root || !images.length) return;
+
+    const main     = document.getElementById('gallery-main');
+    const backdrop = document.getElementById('gallery-backdrop');
+    const count    = document.getElementById('gallery-count');
+    const thumbs   = Array.prototype.slice.call(root.querySelectorAll('[data-gallery-index]'));
+    let index = 0;
+    let lightboxOpen = false;
+    let lastFocused  = null;
+
+    function show(next) {
+      index = (next + images.length) % images.length;
+      const img = images[index];
+      main.src = img.src;
+      main.alt = img.alt || course.image_alt_text || course.title;
+      if (backdrop) backdrop.src = img.src;
+      // a broken image in the middle of the set shouldn't hide the whole stage
+      main.closest('.hero-media').classList.remove('img-failed');
+      if (count) count.textContent = (index + 1) + ' / ' + images.length;
+      thumbs.forEach((t, i) => {
+        t.classList.toggle('is-active', i === index);
+        t.setAttribute('aria-selected', i === index ? 'true' : 'false');
+      });
+      if (lightboxOpen) paintLightbox();
+    }
+
+    root.querySelectorAll('[data-gallery-step]').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        show(index + Number(btn.dataset.galleryStep));
+      });
+    });
+    thumbs.forEach(t => t.addEventListener('click', () => show(Number(t.dataset.galleryIndex))));
+
+    // arrow keys move through the set while the gallery has focus
+    root.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); show(index - 1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); show(index + 1); }
+    });
+
+    /* ---- lightbox ---- */
+    const box      = document.getElementById('lightbox');
+    const boxImg   = document.getElementById('lb-img');
+    const boxCap   = document.getElementById('lb-caption-text');
+    const boxCount = document.getElementById('lb-count');
+    const stage    = document.getElementById('gallery-stage');
+
+    function paintLightbox() {
+      if (!boxImg) return;
+      const img = images[index];
+      boxImg.src = img.src;
+      boxImg.alt = img.alt || course.title;
+      if (boxCap) boxCap.textContent = img.alt || '';
+      if (boxCount) boxCount.textContent = images.length > 1 ? (index + 1) + ' / ' + images.length : '';
+    }
+
+    function openLightbox() {
+      if (!box) return;
+      lastFocused = document.activeElement;
+      lightboxOpen = true;
+      paintLightbox();
+      box.hidden = false;
+      document.body.style.overflow = 'hidden';
+      const close = document.getElementById('lb-close');
+      if (close) close.focus();
+    }
+
+    function closeLightbox() {
+      if (!box || !lightboxOpen) return;
+      lightboxOpen = false;
+      box.hidden = true;
+      document.body.style.overflow = '';
+      if (lastFocused && lastFocused.focus) lastFocused.focus();
+    }
+
+    if (stage && box) {
+      stage.addEventListener('click', openLightbox);
+      box.querySelectorAll('[data-lb-step]').forEach(btn => {
+        btn.addEventListener('click', () => show(index + Number(btn.dataset.lbStep)));
+      });
+      box.querySelectorAll('[data-lb-close]').forEach(btn => btn.addEventListener('click', closeLightbox));
+      // click the backdrop, not the picture, to dismiss
+      box.addEventListener('click', e => { if (e.target === box) closeLightbox(); });
+      document.addEventListener('keydown', e => {
+        if (!lightboxOpen) return;
+        if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); show(index - 1); }
+        if (e.key === 'ArrowRight') { e.preventDefault(); show(index + 1); }
+      });
+      box.querySelectorAll('.lb-nav').forEach(btn => { btn.hidden = images.length < 2; });
+    }
+
+    /* ---- touch swipe (stage + lightbox) ---- */
+    if (images.length > 1) {
+      [root.querySelector('.hero-media'), box].forEach(surface => {
+        if (!surface) return;
+        let startX = null, startY = null;
+        surface.addEventListener('touchstart', e => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        }, { passive: true });
+        surface.addEventListener('touchend', e => {
+          if (startX == null) return;
+          const dx = e.changedTouches[0].clientX - startX;
+          const dy = e.changedTouches[0].clientY - startY;
+          // horizontal intent only — a vertical drag is the page scrolling
+          if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.6) show(index + (dx < 0 ? 1 : -1));
+          startX = startY = null;
+        }, { passive: true });
+      });
+    }
   }
 
   /* ============================================================

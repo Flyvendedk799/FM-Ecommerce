@@ -22,6 +22,7 @@ const HEADER = [
   'Handle', 'Title', 'Body (HTML)', 'Vendor', 'Type', 'Tags', 'Published',
   'Option1 Name', 'Option1 Value', 'Option2 Name', 'Option2 Value',
   'Variant SKU', 'Variant Price', 'Image Src', 'SEO Description',
+  'Image Position', 'Image Alt Text',
 ].join(',');
 
 function csvEscape(value) {
@@ -45,6 +46,8 @@ function row(values) {
     values.price,
     values.image,
     values.seo,
+    values.imagePosition,
+    values.imageAlt,
   ].map(csvEscape).join(',');
 }
 
@@ -167,4 +170,62 @@ test('Shopify CSV import merges existing courses and only adds new dates', async
     ['test-excel-aarhus-juli', 'test-excel-online-august', 'test-excel-taastrup-juli']
   );
   assert.strictEqual(sessions.body.find(s => s.source_variant_sku === 'test-excel-online-august').variant_price, 4500);
+});
+
+test('Shopify CSV import keeps the whole gallery, ordered by Image Position', async () => {
+  const galleryCsv = csv([
+    {
+      handle: 'test-galleri-kursus',
+      title: 'Kursus med galleri',
+      body: '<p>Beskrivelse.</p>',
+      vendor: 'Galleri Supplier',
+      type: 'Kursus',
+      tags: 'Kursus',
+      published: 'true',
+      location: 'Aarhus',
+      dateText: '3. september',
+      sku: 'test-galleri-aarhus',
+      price: '3200',
+      image: 'https://example.com/andet.jpg',
+      imagePosition: '2',
+      imageAlt: 'Andet billede',
+      seo: 'SEO',
+    },
+    // image-only row: the export's usual shape for extra gallery shots
+    {
+      handle: 'test-galleri-kursus',
+      title: '', body: '', vendor: '', type: '', tags: '', published: '',
+      location: '', dateText: '', sku: '', price: '',
+      image: 'https://example.com/forside.jpg',
+      imagePosition: '1',
+      imageAlt: 'Forsidebillede',
+      seo: '',
+    },
+    // a repeat of an earlier src must not show up twice
+    {
+      handle: 'test-galleri-kursus',
+      title: '', body: '', vendor: '', type: '', tags: '', published: '',
+      location: '', dateText: '', sku: '', price: '',
+      image: 'https://example.com/andet.jpg',
+      imagePosition: '3',
+      imageAlt: '',
+      seo: '',
+    },
+  ]);
+
+  const res = await j('/api/courses/import/shopify-csv', jsonReq('POST', {
+    csv: galleryCsv,
+    source_date: '2030-06-01',
+  }, true));
+  assert.strictEqual(res.status, 201);
+
+  const courses = await j('/api/courses?q=test-galleri-kursus');
+  const course = courses.body[0];
+  assert.deepStrictEqual(course.images, [
+    { src: 'https://example.com/forside.jpg', alt: 'Forsidebillede' },
+    { src: 'https://example.com/andet.jpg', alt: 'Andet billede' },
+  ]);
+  // the lead shot drives the legacy single-image fields
+  assert.strictEqual(course.image_src, 'https://example.com/forside.jpg');
+  assert.strictEqual(course.image_alt_text, 'Forsidebillede');
 });

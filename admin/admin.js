@@ -217,6 +217,93 @@
     </button>`;
   }
 
+  /* ============ GALLERY EDITOR ============
+     A course's images are ordered — the first one is the card thumbnail and
+     the product page's lead shot — so this list edits src + alt together and
+     can be reordered, unlike the plain text lists above. */
+  const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  const ICON_UP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  const ICON_DOWN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
+
+  function galleryItemHTML(img = {}) {
+    const src = typeof img === 'string' ? img : (img.src || '');
+    const alt = typeof img === 'string' ? '' : (img.alt || '');
+    return `<div class="gallery-item">
+      <div class="gallery-thumb${src ? '' : ' is-empty'}">
+        ${src ? `<img src="${escHtml(src)}" alt="" loading="lazy">` : ''}
+      </div>
+      <div class="gallery-fields">
+        <input class="form-input" name="gallery_src[]" placeholder="https://..." value="${escHtml(src)}">
+        <input class="form-input" name="gallery_alt[]" placeholder="Alt-tekst (valgfri)" value="${escHtml(alt)}">
+      </div>
+      <div class="gallery-actions">
+        <button type="button" class="btn-icon" data-gallery-move="-1" title="Flyt op">${ICON_UP}</button>
+        <button type="button" class="btn-icon" data-gallery-move="1" title="Flyt ned">${ICON_DOWN}</button>
+        <button type="button" class="btn-remove-item" data-gallery-remove title="Fjern">${ICON_X}</button>
+      </div>
+    </div>`;
+  }
+
+  // Courses imported before the gallery existed only have image_src.
+  function courseGallery(course) {
+    if (Array.isArray(course.images) && course.images.length) return course.images;
+    return course.image_src ? [{ src: course.image_src, alt: course.image_alt_text || '' }] : [];
+  }
+
+  function galleryEditor(images = []) {
+    const items = Array.isArray(images) && images.length ? images : [];
+    return `<div class="gallery-list" id="gallery-list">${items.map(galleryItemHTML).join('')}</div>
+    <button type="button" class="btn-add-item" id="gallery-add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Tilføj billede
+    </button>
+    <p class="form-hint">Første billede bruges som hovedbillede på kort og kursusside. Resten vises i galleriet.</p>`;
+  }
+
+  function bindGalleryEditor(container = document) {
+    const list = container.querySelector('#gallery-list');
+    const add = container.querySelector('#gallery-add');
+    if (!list) return;
+
+    function refreshThumb(item) {
+      const src = item.querySelector('[name="gallery_src[]"]').value.trim();
+      const thumb = item.querySelector('.gallery-thumb');
+      thumb.classList.toggle('is-empty', !src);
+      thumb.innerHTML = src ? `<img src="${escHtml(src)}" alt="" loading="lazy">` : '';
+    }
+
+    list.addEventListener('click', e => {
+      const item = e.target.closest('.gallery-item');
+      if (!item) return;
+      if (e.target.closest('[data-gallery-remove]')) { item.remove(); return; }
+      const move = e.target.closest('[data-gallery-move]');
+      if (!move) return;
+      const dir = Number(move.dataset.galleryMove);
+      const sibling = dir < 0 ? item.previousElementSibling : item.nextElementSibling;
+      if (!sibling) return;
+      if (dir < 0) list.insertBefore(item, sibling);
+      else list.insertBefore(sibling, item);
+    });
+
+    list.addEventListener('change', e => {
+      if (e.target.name === 'gallery_src[]') refreshThumb(e.target.closest('.gallery-item'));
+    });
+
+    if (add) add.addEventListener('click', () => {
+      list.insertAdjacentHTML('beforeend', galleryItemHTML());
+      list.lastElementChild.querySelector('[name="gallery_src[]"]').focus();
+    });
+  }
+
+  function getGalleryValues() {
+    return Array.from(document.querySelectorAll('#gallery-list .gallery-item'))
+      .map(item => ({
+        src: item.querySelector('[name="gallery_src[]"]').value.trim(),
+        alt: item.querySelector('[name="gallery_alt[]"]').value.trim(),
+      }))
+      .filter(img => img.src);
+  }
+
   function getListValues(id) {
     return Array.from(document.querySelectorAll(`[name="${id}[]"]`))
       .map(el => el.value.trim())
@@ -224,7 +311,9 @@
   }
 
   function bindDynamicLists(container = document) {
-    container.querySelectorAll('.btn-add-item').forEach(btn => {
+    // [data-list] scopes this to the generic text lists — the gallery editor
+    // shares the button styling but brings its own handler
+    container.querySelectorAll('.btn-add-item[data-list]').forEach(btn => {
       btn.addEventListener('click', () => {
         const listEl = document.getElementById(btn.dataset.list);
         const id = btn.dataset.id;
@@ -843,12 +932,8 @@
               <textarea class="form-textarea" id="f-tags" rows="2">${escHtml(course.tags||'')}</textarea>
             </div>
             <div class="form-group form-col-full">
-              <label class="form-label">Billede URL</label>
-              <input class="form-input" id="f-image-src" value="${escHtml(course.image_src||'')}" placeholder="https://...">
-            </div>
-            <div class="form-group form-col-full">
-              <label class="form-label">Billede alt-tekst</label>
-              <input class="form-input" id="f-image-alt" value="${escHtml(course.image_alt_text||'')}" placeholder="Beskriv billedet">
+              <label class="form-label">Billeder</label>
+              ${galleryEditor(courseGallery(course))}
             </div>
             <div class="form-group form-col-full">
               <label class="form-label">SEO title</label>
@@ -876,6 +961,7 @@
 
     bindTabs(document);
     bindDynamicLists(modalBody);
+    bindGalleryEditor(modalBody);
     bindPhaseEditor();
 
     // Color sync
@@ -926,8 +1012,8 @@
         product_type: document.getElementById('f-product-type').value.trim(),
         published: document.getElementById('f-published').value === '1',
         tags: document.getElementById('f-tags').value.trim(),
-        image_src: document.getElementById('f-image-src').value.trim(),
-        image_alt_text: document.getElementById('f-image-alt').value.trim(),
+        // the API derives image_src / image_alt_text from the gallery's first entry
+        images: getGalleryValues(),
         seo_title: document.getElementById('f-seo-title').value.trim(),
         seo_description: document.getElementById('f-seo-desc').value.trim(),
         body_html: document.getElementById('f-body-html').value.trim(),

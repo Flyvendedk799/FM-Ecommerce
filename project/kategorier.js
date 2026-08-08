@@ -123,19 +123,23 @@
   }
 
   function badgeHTML(c) {
-    if (c.badge === 'amu')  return '<span class="cc-badge amu">AMU-finansieret</span>';
-    if (c.badge === 'cert') return '<span class="cc-badge cert">Eksamen inkluderet</span>';
+    if (c.badge === 'amu')  return '<span class="cm-badge amu">AMU-finansieret</span>';
+    if (c.badge === 'cert') return '<span class="cm-badge cert">Eksamen inkluderet</span>';
     return '';
   }
 
   function cardSignalHTML(c) {
     if (Number(c.rating || 0) > 0) {
-      return '<span class="cc-rating"><span class="cc-star">★</span>' + Number(c.rating).toFixed(1).replace('.', ',') + '</span>';
+      return '<span class="cm-signal"><span class="cm-star">★</span>' + Number(c.rating).toFixed(1).replace('.', ',') + '</span>';
     }
     if (c.upcomingCount > 0) {
-      return '<span class="cc-rating">' + c.upcomingCount + ' dato' + (c.upcomingCount === 1 ? '' : 'er') + '</span>';
+      return '<span class="cm-signal">' + c.upcomingCount + ' dato' + (c.upcomingCount === 1 ? '' : 'er') + '</span>';
     }
-    return '<span class="cc-rating">Firmahold</span>';
+    return '<span class="cm-signal">Firmahold</span>';
+  }
+
+  function monogram(title) {
+    return window.FMCardMedia ? window.FMCardMedia.monogram(title) : '';
   }
 
   function courseCard(c) {
@@ -145,27 +149,28 @@
     var loc = locationSummary(c);
     if (loc) supplierLine += ' · ' + escAttr(loc);
     if (c.reviews > 0) supplierLine += ' · ' + c.reviews.toLocaleString('da-DK') + ' anm.';
-    // Vendor images are logos/screenshots in every aspect ratio, so they sit
-    // contained on a light media area; a load failure falls back to the
-    // colored top by removing .has-img.
+    // Supplier artwork ranges from full-bleed photos to narrow logos, so the
+    // frame only gets the course colour here — card-media.js measures the
+    // decoded image and picks cover-vs-contain (and handles load failures).
     var imgHTML = c.image
-      ? '<img class="cc-img" src="' + escAttr(c.image) + '" alt="' + escAttr(c.imageAlt || c.title) + '" loading="lazy" onerror="this.closest(&quot;.cc-top&quot;).classList.remove(&quot;has-img&quot;)">'
+      ? '<img class="card-img" src="' + escAttr(c.image) + '" alt="' + escAttr(c.imageAlt || c.title) + '" loading="lazy">'
       : '';
     return '<a class="cc-card reveal" href="' + escAttr(c.url) + '">' +
-      '<div class="cc-top' + (c.image ? ' has-img' : '') + '" style="background:' + safeColor(c.color) + '">' +
+      '<div class="card-media' + (c.image ? ' has-img' : '') + '" data-card-media style="--card-tint:' + safeColor(c.color) + '">' +
         imgHTML +
-        '<div class="cc-cat-row">' +
-          '<span class="cc-cat">' + escAttr(catLabel) + '</span>' +
+        '<span class="card-monogram" aria-hidden="true">' + escAttr(monogram(c.title)) + '</span>' +
+        '<div class="cm-row">' +
+          '<span class="cm-chip">' + escAttr(catLabel) + '</span>' +
           cardSignalHTML(c) +
         '</div>' +
-        '<div class="cc-badges">' + badgeHTML(c) + '</div>' +
+        '<div class="cm-badges">' + badgeHTML(c) + '</div>' +
       '</div>' +
       '<div class="cc-body">' +
         '<h3 class="cc-title">' + escAttr(c.title) + '</h3>' +
         '<div class="cc-supplier">' + supplierLine + '</div>' +
         '<div class="cc-meta">' + formatChip(c) + '</div>' +
         availabilityHTML(c) +
-        '<div class="cc-foot">' + priceHTML(c) + '<span class="cc-cta">Se kursus →</span></div>' +
+        '<div class="cc-foot">' + priceHTML(c) + '<span class="cc-cta">Se kursus <span class="cc-cta-arrow">→</span></span></div>' +
       '</div>' +
     '</a>';
   }
@@ -440,6 +445,7 @@
       return;
     }
     grid.innerHTML = courses.map(courseCard).join('');
+    if (window.FMCardMedia) window.FMCardMedia.enhance(grid);
     initReveals();
   }
 

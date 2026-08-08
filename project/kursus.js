@@ -267,7 +267,7 @@
 
     return `
       <div class="gallery" id="course-gallery">
-        <div class="hero-media${multi ? ' has-thumbs' : ''}" data-parallax>
+        <div class="hero-media${multi ? ' has-thumbs' : ''}" data-parallax data-card-media>
           <img class="hero-media-backdrop" id="gallery-backdrop" src="${esc(first.src)}" alt="" aria-hidden="true">
           <button type="button" class="gallery-stage" id="gallery-stage" aria-label="Åbn billedet i fuld størrelse">
             <img class="hero-course-img" id="gallery-main" src="${esc(first.src)}"
@@ -1265,7 +1265,10 @@ ${related.length === 0 ? `
       main.alt = img.alt || course.image_alt_text || course.title;
       if (backdrop) backdrop.src = img.src;
       // a broken image in the middle of the set shouldn't hide the whole stage
-      main.closest('.hero-media').classList.remove('img-failed');
+      const frame = main.closest('.hero-media');
+      frame.classList.remove('img-failed');
+      // stepping from a photo to a logo changes how the frame should present it
+      if (window.FMCardMedia) window.FMCardMedia.refresh(frame);
       if (count) count.textContent = (index + 1) + ' / ' + images.length;
       thumbs.forEach((t, i) => {
         t.classList.toggle('is-active', i === index);

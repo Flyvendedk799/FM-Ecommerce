@@ -44,24 +44,35 @@
     frame.classList.add('is-failed');
   }
 
+  function apply(frame) {
+    if (!frame || frame.dataset.cardMediaReady) return;
+    frame.dataset.cardMediaReady = '1';
+    const img = frame.querySelector('img');
+    if (!img || !img.getAttribute('src')) { fail(frame); return; }
+    // a cached image can already be decoded before this runs; one that is
+    // "complete" with no intrinsic size has errored
+    if (img.complete) {
+      if (img.naturalWidth) settle(frame, img);
+      else fail(frame);
+      return;
+    }
+    frame.classList.add('is-loading');
+    img.addEventListener('load', () => settle(frame, img), { once: true });
+    img.addEventListener('error', () => fail(frame), { once: true });
+  }
+
   function enhance(root) {
     const scope = root && root.querySelectorAll ? root : document;
-    scope.querySelectorAll('[data-card-media]').forEach(frame => {
-      if (frame.dataset.cardMediaReady) return;
-      frame.dataset.cardMediaReady = '1';
-      const img = frame.querySelector('img');
-      if (!img || !img.getAttribute('src')) { fail(frame); return; }
-      // a cached image can already be decoded before this runs; one that is
-      // "complete" with no intrinsic size has errored
-      if (img.complete) {
-        if (img.naturalWidth) settle(frame, img);
-        else fail(frame);
-        return;
-      }
-      frame.classList.add('is-loading');
-      img.addEventListener('load', () => settle(frame, img), { once: true });
-      img.addEventListener('error', () => fail(frame), { once: true });
-    });
+    scope.querySelectorAll('[data-card-media]').forEach(apply);
+  }
+
+  // Re-measure a frame whose image was swapped underneath it — a gallery can
+  // step from a photo straight to a logo, and the frame has to follow.
+  function refresh(frame) {
+    if (!frame) return;
+    frame.classList.remove('is-photo', 'is-logo', 'is-failed');
+    delete frame.dataset.cardMediaReady;
+    apply(frame);
   }
 
   // Initials for the fallback frame — first letters of the two leading words,
@@ -73,7 +84,7 @@
     return letters.toUpperCase().slice(0, 2);
   }
 
-  window.FMCardMedia = { enhance, classify, monogram };
+  window.FMCardMedia = { enhance, refresh, classify, monogram };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => enhance(document));

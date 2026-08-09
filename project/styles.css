@@ -323,7 +323,6 @@ textarea:focus-visible,
    both columns on the same line and turns the difference into deliberate
    space rather than a hole. */
 .hero-grid .hero-supplier { margin-top: auto; padding-top: 26px; }
-.hero-grid .hero-aside { align-self: start; }
 .hero-lead { padding-top: 6px; display: flex; flex-direction: column; }
 .hero-meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
 .chip {
@@ -631,7 +630,21 @@ textarea:focus-visible,
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* both hero columns close on the same line: the card fills the row, and the
+     slack goes wherever it earns its keep — into the picture on a photo card,
+     otherwise into the body, which drops its terms to the card floor */
+  height: 100%;
 }
+/* spare height is shared out between the card's rows rather than pooling in
+   one gap, so a stretched card reads as airy instead of half-empty */
+.bcard-body { flex: 1 1 auto; justify-content: space-between; }
+.bcard .gallery { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; }
+.bcard .hero-media { flex: 1 1 auto; min-height: 0; }
+/* a photograph is happy to take all of it; a logo panel only so much before
+   the mark starts to look stranded in white */
+.bcard.is-photo .gallery { flex: 1 1 auto; }
+.bcard.is-photo .bcard-body { flex: 0 0 auto; }
+.bcard.is-logo .gallery { flex: 1 1 auto; max-height: 290px; }
 /* the media is a header now: no rounding of its own, and a calmer ratio than
    the old full-height stage */
 .bcard .hero-media { border-radius: 0; aspect-ratio: 3 / 2; }
@@ -646,7 +659,9 @@ textarea:focus-visible,
   padding: clamp(18px, 4%, 26px);
   min-height: 0;
 }
-.bcard .hero-media.is-logo .hero-course-img { max-height: 96px; }
+/* 140px is about the natural height of a supplier lockup — enough that the
+   mark fills a stretched panel, low enough that it is never upscaled */
+.bcard .hero-media.is-logo .hero-course-img { max-height: 140px; }
 .bcard .gallery-thumbs { padding: 12px clamp(18px, 2.2vw, 24px) 0; }
 .bcard .gallery-thumb { width: 54px; height: 54px; border-radius: 10px; }
 

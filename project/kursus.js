@@ -1331,12 +1331,20 @@ ${related.length === 0 ? `
     // covers the whole gallery rather than the current image, so stepping
     // through the set never changes the card's height under the visitor.
     const heroFrame = root.querySelector('.hero-media');
+    const heroCard  = root.closest('.bcard');
     if (heroFrame && window.FMCardMedia) {
       window.FMCardMedia.classifyAll(images.map(i => i.src), kinds => {
         const known = kinds.filter(Boolean);
         const logoOnly = known.length > 0 && known.every(k => k === 'is-logo');
+        const kind = !known.length ? 'is-failed' : logoOnly ? 'is-logo' : 'is-photo';
         heroFrame.classList.remove('is-photo', 'is-logo');
-        heroFrame.classList.add(!known.length ? 'is-failed' : logoOnly ? 'is-logo' : 'is-photo');
+        heroFrame.classList.add(kind);
+        // the card needs the verdict too: only a photo should swallow the
+        // column's spare height
+        if (heroCard) {
+          heroCard.classList.remove('is-photo', 'is-logo');
+          heroCard.classList.add(kind);
+        }
       });
     }
 

@@ -241,18 +241,9 @@
 
   function galleryHTML(course) {
     const images = galleryImages(course);
-    const durationTag = `
-        <div class="hero-media-tag">
-          <span class="chip accent"><span class="dot" style="background:var(--on-accent)"></span>${esc(course.duration || '1 dag')}</span>
-        </div>`;
-
-    if (!images.length) {
-      return `
-      <div class="hero-media" data-parallax>
-        <image-slot id="hero-course" shape="rounded" radius="28" placeholder="Slip kursusbillede"></image-slot>
-        ${durationTag}
-      </div>`;
-    }
+    // No artwork at all is fine now: the booking card below carries the
+    // column on its own, so an empty placeholder frame would be noise.
+    if (!images.length) return '';
 
     const first = images[0];
     const multi = images.length > 1;
@@ -267,7 +258,7 @@
 
     return `
       <div class="gallery" id="course-gallery">
-        <div class="hero-media${multi ? ' has-thumbs' : ''}" data-parallax>
+        <div class="hero-media${multi ? ' has-thumbs' : ''}">
           <img class="hero-media-backdrop" id="gallery-backdrop" src="${esc(first.src)}" alt="" aria-hidden="true">
           <button type="button" class="gallery-stage" id="gallery-stage" aria-label="Åbn billedet i fuld størrelse">
             <img class="hero-course-img" id="gallery-main" src="${esc(first.src)}"
@@ -281,9 +272,103 @@
           <button type="button" class="gallery-nav prev" data-gallery-step="-1" aria-label="Forrige billede">‹</button>
           <button type="button" class="gallery-nav next" data-gallery-step="1" aria-label="Næste billede">›</button>
           <div class="gallery-count" id="gallery-count" aria-hidden="true">1 / ${images.length}</div>` : ''}
-          ${durationTag}
         </div>
         ${thumbs}
+      </div>`;
+  }
+
+  /* ============================================================
+     HERO BOOKING CARD
+     A course page has one job on arrival: say what this is, what it
+     costs, when you can go and how to book — without scrolling. The
+     card carries price, next date and CTA, which also means the hero's
+     second column stands on its own content instead of depending on
+     whatever artwork the supplier happened to upload.
+  ============================================================ */
+  function fmtDateShort(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return '';
+    const stamp = `${d.getDate()}. ${(M_ABBR[d.getMonth()] || '').toLowerCase()}.`;
+    return d.getFullYear() === new Date().getFullYear() ? stamp : `${stamp} ${d.getFullYear()}`;
+  }
+
+  const ICON_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/></svg>';
+
+  function heroAvailabilityHTML(next) {
+    if (!next) {
+      return `<div class="bc-next muted">${ICON_CAL}
+        <div><b>Ingen faste datoer lige nu</b><span>Vi sætter gerne et firmahold op til jer</span></div>
+      </div>`;
+    }
+    const seats = sessionSeatsRemaining(next);
+    const where = next.is_online ? 'Online' : (next.location || '');
+    const scarce = seats != null && seats <= 4
+      ? ` · <span class="bc-scarce">${Math.max(0, seats)} pladser tilbage</span>`
+      : '';
+    return `<div class="bc-next">${ICON_CAL}
+      <div><b>Næste hold ${esc(fmtDateShort(next.date))}</b><span>${esc(where)}${scarce}</span></div>
+    </div>`;
+  }
+
+  // Where a course actually runs is a first question for a buyer, and until
+  // now it only appeared far down the page in the date picker.
+  function heroWhereHTML(locKeys, dateCount) {
+    if (!locKeys.length) return '';
+    const cities = locKeys.map(k => `<span class="hw-city">${esc(k === 'online' ? 'Online' : k)}</span>`).join('');
+    return `
+      <div class="hero-where">
+        <span class="hw-label">Afholdes i</span>
+        <div class="hw-cities">${cities}</div>
+        <span class="hw-count">${dateCount} ${dateCount === 1 ? 'kommende dato' : 'kommende datoer'}</span>
+      </div>`;
+  }
+
+  /* The strongest thing to put under the course's summary is what the buyer
+     actually gets. Outcomes are the better copy, but CSV-imported courses
+     have none, so the price's inclusions stand in — those the importer always
+     fills. Both appear again further down the page in full; this is the
+     summary a visitor reads before deciding to scroll at all. */
+  function heroHighlightsHTML(outcomes, included) {
+    const useOutcomes = outcomes.length > 0;
+    const items = (useOutcomes ? outcomes : included).slice(0, 3);
+    if (!items.length) return '';
+    return `
+      <div class="hero-highlights">
+        <span class="hh-label">${useOutcomes ? 'Det lærer du' : 'Inkluderet i prisen'}</span>
+        <ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      </div>`;
+  }
+
+  function bookingCardHTML(course, badge, next) {
+    const free = badge === 'amu' || Number(course.price || 0) === 0;
+    const amount = free
+      ? 'Gratis<small>*</small>'
+      : `kr. ${(+course.price).toLocaleString('da-DK')}<small>,-</small>`;
+    const rating = Number(course.rating || 0) > 0
+      ? `<span class="bc-rating"><span class="st">★</span>${(+course.rating).toFixed(1).replace('.', ',')}</span>`
+      : '';
+    return `
+      <div class="bcard">
+        ${galleryHTML(course)}
+        <div class="bcard-body">
+          <div class="bc-price-row">
+            <div>
+              <div class="bc-label">${esc(course.price_label || 'Pris ekskl. moms')}</div>
+              <div class="bc-amount">${amount}</div>
+            </div>
+            ${rating}
+          </div>
+          ${course.price_note ? `<div class="bc-note">${esc(course.price_note)}</div>` : ''}
+          ${heroAvailabilityHTML(next)}
+          <button class="btn-book" id="hero-book-btn" data-scroll="#datoer">
+            ${next ? 'Vælg dato' : 'Få besked om datoer'} <span class="arrow">→</span>
+          </button>
+          <ul class="bc-trust">
+            <li>Ingen betaling nu — du vælger dato først</li>
+            <li>Gratis afbestilling indtil 14 dage før</li>
+          </ul>
+        </div>
       </div>`;
   }
 
@@ -293,6 +378,12 @@
   function buildPageHTML(course, outcomes, included, facts, marquee, phases, badge, locKeys, byLoc, related, reviews) {
     const priceStr  = fmtPrice(course.price, badge);
     const chipLabel = esc(course.category_label || 'Kursus');
+    // the soonest date a visitor could actually take, for the hero card
+    const upcoming = locKeys
+      .reduce((all, k) => all.concat(byLoc[k] || []), [])
+      .filter(s => s.date)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const nextSession = upcoming.find(hasSeat) || upcoming[0] || null;
     const factsHTML = facts.slice(0, 4).map((f, i) => `
       <div class="fact" id="fact-${i}">
         <div class="k">${esc(f.k)}</div>
@@ -341,30 +432,16 @@
         </span>
       </h1>
       <p class="hero-sub">${esc(course.short_description || course.description || '')}</p>
+      ${heroWhereHTML(locKeys, upcoming.length)}
+      ${heroHighlightsHTML(outcomes, included)}
       <div class="hero-supplier">
         <span class="supplier-logo">${esc(course.supplier_abbr || '?')}</span>
         <span>Udbydes af <b>${esc(course.supplier_name || 'Futurematch')}</b>${course.rating ? ` · ${(+course.rating).toFixed(1)} ★ fra ${(+course.review_count||0).toLocaleString('da-DK')} kursister` : ''}</span>
       </div>
-      <div class="hero-price">
-        <div class="hp-main">
-          <div class="hp-label">${esc(course.price_label || 'Pris ekskl. moms')}</div>
-          <div class="hp-amount">${badge === 'amu' || course.price === 0 ? 'fra kr. 0<small>,-*</small>' : 'kr. ' + (+course.price).toLocaleString('da-DK') + '<small>,-</small>'}</div>
-          ${course.price_note ? `<div class="hp-note">${esc(course.price_note)}</div>` : ''}
-        </div>
-        <div class="hp-action">
-          <button class="btn-book" id="hero-book-btn" data-scroll="#datoer">
-            Vælg dato <span class="arrow">→</span>
-          </button>
-          <div class="pc-reassure light">
-            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-            Ingen betaling nu — du vælger dato først
-          </div>
-        </div>
-      </div>
     </div>
 
     <aside class="hero-aside reveal reveal-d2 is-in">
-      ${galleryHTML(course)}
+      ${bookingCardHTML(course, badge, nextSession)}
     </aside>
   </div>
 
@@ -1250,19 +1327,24 @@ ${related.length === 0 ? `
     const root = document.getElementById('course-gallery');
     if (!root || !images.length) return;
 
-    // A logo needs far less room than a photo: left in the full-width hero it
-    // leaves a dead column beside the title. The verdict covers the whole
-    // gallery — a set holding any photograph keeps the big stage, so stepping
-    // through it never reflows the page.
+    // A logo needs a short header; a photograph earns a tall one. The verdict
+    // covers the whole gallery rather than the current image, so stepping
+    // through the set never changes the card's height under the visitor.
     const heroFrame = root.querySelector('.hero-media');
-    const heroGrid  = root.closest('.hero-grid');
+    const heroCard  = root.closest('.bcard');
     if (heroFrame && window.FMCardMedia) {
       window.FMCardMedia.classifyAll(images.map(i => i.src), kinds => {
         const known = kinds.filter(Boolean);
         const logoOnly = known.length > 0 && known.every(k => k === 'is-logo');
+        const kind = !known.length ? 'is-failed' : logoOnly ? 'is-logo' : 'is-photo';
         heroFrame.classList.remove('is-photo', 'is-logo');
-        heroFrame.classList.add(!known.length ? 'is-failed' : logoOnly ? 'is-logo' : 'is-photo');
-        if (heroGrid) heroGrid.classList.toggle('hero-logo-only', logoOnly);
+        heroFrame.classList.add(kind);
+        // the card needs the verdict too: only a photo should swallow the
+        // column's spare height
+        if (heroCard) {
+          heroCard.classList.remove('is-photo', 'is-logo');
+          heroCard.classList.add(kind);
+        }
       });
     }
 

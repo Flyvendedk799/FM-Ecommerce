@@ -588,6 +588,21 @@ textarea:focus-visible,
 .hero-media.is-logo .gallery-zoom { top: 12px; right: 12px; }
 .hero-media.is-logo .gallery-count { color: var(--ink); background: rgba(23,21,14,0.08); }
 
+/* When a course's only artwork is a logo, the hero stops reserving half its
+   width for it: the lead column takes the space it would have wasted, and the
+   compact brand card centres against it instead of hanging from the top. */
+.hero-grid.hero-logo-only {
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+/* the logo leads as a compact brand card and the copy runs full width below */
+.hero-grid.hero-logo-only .hero-aside { order: -1; width: min(100%, 260px); }
+.hero-grid.hero-logo-only .hero-media.is-logo { padding: 18px 20px 46px; }
+.hero-grid.hero-logo-only .hero-media.is-logo .hero-course-img { max-height: 120px; }
+.hero-grid.hero-logo-only .hero-sub { max-width: 62ch; }
+/* keep price and CTA reading as one unit rather than pinned to opposite edges */
+.hero-grid.hero-logo-only .hero-price { max-width: 760px; }
+
 /* ---------- hero price block (in left column, anchored to bottom) ---------- */
 .hero-price {
   margin-top: auto;

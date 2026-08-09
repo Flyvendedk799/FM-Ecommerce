@@ -314,10 +314,16 @@ textarea:focus-visible,
 .hero { padding-top: 150px; padding-bottom: 40px; position: relative; }
 .hero-grid {
   display: grid;
-  grid-template-columns: 1.12fr 0.88fr;
+  grid-template-columns: 1.18fr 0.82fr;
   gap: clamp(28px, 4vw, 56px);
   align-items: stretch;
 }
+/* The card is content-sized, so on a course with little copy the text column
+   would end far above it. Anchoring the supplier line to the bottom closes
+   both columns on the same line and turns the difference into deliberate
+   space rather than a hole. */
+.hero-grid .hero-supplier { margin-top: auto; padding-top: 26px; }
+.hero-grid .hero-aside { align-self: start; }
 .hero-lead { padding-top: 6px; display: flex; flex-direction: column; }
 .hero-meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 30px; }
 .chip {
@@ -333,18 +339,31 @@ textarea:focus-visible,
 .chip.solid .dot { background: var(--accent); }
 
 .hero h1 {
-  font-size: clamp(2.9rem, 7vw, 6rem);
+  /* course titles are long sentences, not one-word display copy — at the old
+     96px ceiling they wrapped to four lines and swallowed the hero */
+  font-size: clamp(2.3rem, 4.4vw, 4.05rem);
   margin: 6px 0 0;
 }
 .hero h1 .ital { font-style: italic; color: var(--accent); }
 .hero-sub {
   margin-top: 26px;
-  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
-  line-height: 1.5;
+  font-size: clamp(1.05rem, 1.6vw, 1.28rem);
+  line-height: 1.55;
   color: var(--ink);
-  max-width: 30ch;
+  /* 30ch left a visible gutter between the copy and the booking card */
+  max-width: 46ch;
   font-weight: 400;
 }
+/* ---------- hero: where the course runs ---------- */
+.hero-where { margin-top: 26px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.hw-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.hw-cities { display: flex; flex-wrap: wrap; gap: 7px; }
+.hw-city {
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 100px;
+  background: var(--paper-2); border: 1px solid var(--line); color: var(--ink);
+}
+.hw-count { font-size: 13px; color: var(--muted); }
+
 .hero-supplier {
   margin-top: 24px;
   display: flex; align-items: center; gap: 12px;
@@ -387,10 +406,6 @@ textarea:focus-visible,
 }
 .hero-media.img-failed .hero-course-img,
 .hero-media.img-failed .hero-media-backdrop { display: none; }
-.hero-media-tag {
-  position: absolute; left: 16px; bottom: 16px; z-index: 3;
-  display: flex; gap: 8px;
-}
 
 /* ---------- course gallery ---------- */
 .gallery { display: flex; flex-direction: column; gap: 12px; }
@@ -588,40 +603,76 @@ textarea:focus-visible,
 .hero-media.is-logo .gallery-zoom { top: 12px; right: 12px; }
 .hero-media.is-logo .gallery-count { color: var(--ink); background: rgba(23,21,14,0.08); }
 
-/* When a course's only artwork is a logo, the hero stops reserving half its
-   width for it: the lead column takes the space it would have wasted, and the
-   compact brand card centres against it instead of hanging from the top. */
-.hero-grid.hero-logo-only {
-  grid-template-columns: 1fr;
-  gap: 24px;
+/* ---------- hero booking card ----------
+   Arriving on a course page, a visitor needs four answers before scrolling:
+   what it costs, when they can go, whether seats are left, and how to book.
+   Those live together in the hero's second column, which means the column
+   stands on its own content — a supplier logo, a photo set or no artwork at
+   all each work, because the artwork is only the card's header. */
+.bcard {
+  background: var(--paper-2);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
-/* the logo leads as a compact brand card and the copy runs full width below */
-.hero-grid.hero-logo-only .hero-aside { order: -1; width: min(100%, 260px); }
-.hero-grid.hero-logo-only .hero-media.is-logo { padding: 18px 20px 46px; }
-.hero-grid.hero-logo-only .hero-media.is-logo .hero-course-img { max-height: 120px; }
-.hero-grid.hero-logo-only .hero-sub { max-width: 62ch; }
-/* keep price and CTA reading as one unit rather than pinned to opposite edges */
-.hero-grid.hero-logo-only .hero-price { max-width: 760px; }
+/* the media is a header now: no rounding of its own, and a calmer ratio than
+   the old full-height stage */
+.bcard .hero-media { border-radius: 0; aspect-ratio: 3 / 2; }
+.bcard .hero-media.has-thumbs { aspect-ratio: 3 / 2; }
+/* a logo header takes its height from the logo, never from the 4/3 frame a
+   photograph gets */
+.bcard .hero-media.is-logo,
+.bcard .hero-media.is-logo.has-thumbs {
+  aspect-ratio: auto;
+  border: 0;
+  border-bottom: 1.5px solid var(--line);
+  padding: clamp(18px, 4%, 26px);
+  min-height: 0;
+}
+.bcard .hero-media.is-logo .hero-course-img { max-height: 96px; }
+.bcard .gallery-thumbs { padding: 12px clamp(18px, 2.2vw, 24px) 0; }
+.bcard .gallery-thumb { width: 54px; height: 54px; border-radius: 10px; }
 
-/* ---------- hero price block (in left column, anchored to bottom) ---------- */
-.hero-price {
-  margin-top: auto;
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 28px clamp(20px, 4vw, 44px); flex-wrap: wrap;
-  padding-top: 30px; border-top: 1px solid var(--line);
+.bcard-body {
+  padding: clamp(18px, 2.2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
-.hp-main { min-width: 0; }
-.hp-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-.hp-amount { font-family: var(--serif); font-size: clamp(2.6rem, 4.4vw, 3.4rem); line-height: 1; margin: 7px 0 8px; }
-.hp-amount small { font-family: var(--sans); font-size: 0.88rem; color: var(--muted); }
-.hp-note { font-size: 13px; color: var(--muted); max-width: 30ch; }
-.hp-action { display: flex; flex-direction: column; gap: 11px; flex: 0 0 auto; }
-.hp-action .btn-book { margin-top: 0; padding-inline: 30px; }
+.bc-price-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.bc-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.bc-amount { font-family: var(--serif); font-size: clamp(2.1rem, 3vw, 2.7rem); line-height: 1; margin-top: 8px; }
+.bc-amount small { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); }
+.bc-note { font-size: 12.5px; color: var(--muted); margin-top: -6px; }
+.bc-rating {
+  display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0;
+  font-size: 13px; font-weight: 700; padding: 6px 11px; border-radius: 100px;
+  background: var(--paper); border: 1px solid var(--line);
+}
+.bc-rating .st { color: var(--accent); }
+.bc-next {
+  display: flex; align-items: flex-start; gap: 11px;
+  padding: 13px 14px; border-radius: 14px;
+  background: var(--paper); border: 1px solid var(--line);
+}
+.bc-next svg { width: 18px; height: 18px; stroke: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.bc-next b { display: block; font-size: 14px; font-weight: 700; }
+.bc-next span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.bc-next.muted { background: transparent; border-style: dashed; }
+.bc-scarce { color: var(--accent-deep); font-weight: 700; }
+.bcard .btn-book { margin-top: 0; }
+.bc-trust { list-style: none; display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; }
+.bc-trust li { position: relative; padding-left: 21px; font-size: 12.5px; color: var(--muted); }
+.bc-trust li::before {
+  content: ""; position: absolute; left: 0; top: 4px;
+  width: 13px; height: 13px; background: var(--accent);
+  -webkit-mask: var(--ico-check) center / contain no-repeat;
+  mask: var(--ico-check) center / contain no-repeat;
+}
+
 .pc-reassure.light { color: var(--muted); margin-top: 0; }
-@media (max-width: 480px) {
-  .hero-price { flex-direction: column; align-items: stretch; }
-  .hp-action .btn-book { width: 100%; }
-}
 
 /* ---------- quick facts strip — full-width under hero ---------- */
 .facts {

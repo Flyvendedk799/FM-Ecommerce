@@ -556,6 +556,38 @@ textarea:focus-visible,
   .hero-price { margin-top: 30px; }
 }
 
+/* ---------- hero media: logo-shaped artwork ----------
+   A vendor logo or badge blown up to fill a tall editorial stage over a
+   blurred wash of itself looks like a mistake. When card-media.js measures
+   the hero image as a logo, the frame collapses to a compact white card that
+   takes its height from the image's own proportions instead. Photos keep the
+   full stage above. Declared after the breakpoint above so it holds at every
+   width. */
+.hero-media.is-logo,
+.hero-media.is-logo.has-thumbs {
+  aspect-ratio: auto;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  padding: clamp(20px, 5%, 34px);
+  /* room for the duration chip to sit under the logo, never across it */
+  padding-bottom: 64px;
+  display: grid;
+  place-items: center;
+}
+.hero-media.is-logo .hero-media-backdrop { display: none; }
+/* the stage stops covering the frame so the image can drive its height */
+.hero-media.is-logo .gallery-stage { position: static; width: 100%; height: auto; }
+.hero-media.is-logo .hero-course-img {
+  position: static;
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  object-fit: contain;
+  padding: 0;
+}
+.hero-media.is-logo .gallery-zoom { top: 12px; right: 12px; }
+.hero-media.is-logo .gallery-count { color: var(--ink); background: rgba(23,21,14,0.08); }
+
 /* ---------- hero price block (in left column, anchored to bottom) ---------- */
 .hero-price {
   margin-top: auto;
@@ -1173,7 +1205,7 @@ section { position: relative; }
    ============================================================ */
 .card-media {
   position: relative;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   isolation: isolate;
   display: flex;
@@ -1189,7 +1221,7 @@ section { position: relative; }
   width: 100%;
   height: 100%;
   object-fit: contain;
-  padding: clamp(16px, 9%, 34px);
+  padding: clamp(14px, 8%, 30px);
   opacity: 0;
   z-index: 0;
   transition: opacity 0.4s var(--ease), transform 0.6s var(--ease);
@@ -1206,12 +1238,9 @@ section { position: relative; }
     rgba(0,0,0,0.04) 62%, rgba(0,0,0,0.38) 100%);
 }
 
-/* logo / screenshot — keep it whole on a near-white wash of the course
-   colour, which reads as intentional where stark white reads as missing */
-.card-media.is-logo {
-  background: color-mix(in srgb, var(--card-tint, var(--ink)) 7%, #fff);
-  box-shadow: inset 0 -1px 0 var(--line-2);
-}
+/* logo / screenshot — kept whole on a plain white panel, the presentation
+   these cards had before and the one that suits vendor logos best */
+.card-media.is-logo { background: #fff; }
 .card-media.is-logo .card-img { opacity: 1; }
 
 /* loading — a shimmer over the tint instead of an empty hole */
@@ -1294,7 +1323,6 @@ section { position: relative; }
 }
 .rc-card:hover { transform: translateY(-5px); border-color: var(--ink); box-shadow: 0 22px 40px -24px rgba(23,21,14,0.5); }
 .rc-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
-.rc-card .card-media { aspect-ratio: 16 / 10; }
 .rc-card:hover .card-media.is-photo .card-img { transform: scale(1.05); }
 .rc-go { position: absolute; right: 14px; bottom: 14px; z-index: 2; width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-weight: 700; opacity: 0; transform: translateY(6px); transition: opacity 0.3s var(--ease), transform 0.3s var(--ease); }
 .rc-card:hover .rc-go { opacity: 1; transform: none; }

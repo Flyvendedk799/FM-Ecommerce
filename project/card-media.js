@@ -44,6 +44,24 @@
     frame.classList.add('is-failed');
   }
 
+  // Measure a whole set of sources before deciding anything. A course hero has
+  // to pick one presentation for the entire gallery: classifying per image
+  // would reflow the page every time the visitor stepped onto a differently
+  // shaped one. Probes hit the same cache entries as the real <img>, so this
+  // costs no extra downloads.
+  function classifyAll(sources, done) {
+    const kinds = [];
+    let pending = sources.length;
+    if (!pending) { done(kinds); return; }
+    sources.forEach((src, i) => {
+      const probe = new Image();
+      const finish = kind => { kinds[i] = kind; if (!--pending) done(kinds); };
+      probe.onload = () => finish(classify(probe));
+      probe.onerror = () => finish(null);
+      probe.src = src;
+    });
+  }
+
   function apply(frame) {
     if (!frame || frame.dataset.cardMediaReady) return;
     frame.dataset.cardMediaReady = '1';
@@ -66,14 +84,6 @@
     scope.querySelectorAll('[data-card-media]').forEach(apply);
   }
 
-  // Re-measure a frame whose image was swapped underneath it — a gallery can
-  // step from a photo straight to a logo, and the frame has to follow.
-  function refresh(frame) {
-    if (!frame) return;
-    frame.classList.remove('is-photo', 'is-logo', 'is-failed');
-    delete frame.dataset.cardMediaReady;
-    apply(frame);
-  }
 
   // Initials for the fallback frame — first letters of the two leading words,
   // so an imageless card still reads as designed rather than as a blank slab.
@@ -84,7 +94,7 @@
     return letters.toUpperCase().slice(0, 2);
   }
 
-  window.FMCardMedia = { enhance, refresh, classify, monogram };
+  window.FMCardMedia = { enhance, classifyAll, classify, monogram };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => enhance(document));

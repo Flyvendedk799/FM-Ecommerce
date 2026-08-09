@@ -324,6 +324,22 @@
       </div>`;
   }
 
+  /* The strongest thing to put under the course's summary is what the buyer
+     actually gets. Outcomes are the better copy, but CSV-imported courses
+     have none, so the price's inclusions stand in — those the importer always
+     fills. Both appear again further down the page in full; this is the
+     summary a visitor reads before deciding to scroll at all. */
+  function heroHighlightsHTML(outcomes, included) {
+    const useOutcomes = outcomes.length > 0;
+    const items = (useOutcomes ? outcomes : included).slice(0, 3);
+    if (!items.length) return '';
+    return `
+      <div class="hero-highlights">
+        <span class="hh-label">${useOutcomes ? 'Det lærer du' : 'Inkluderet i prisen'}</span>
+        <ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>
+      </div>`;
+  }
+
   function bookingCardHTML(course, badge, next) {
     const free = badge === 'amu' || Number(course.price || 0) === 0;
     const amount = free
@@ -417,6 +433,7 @@
       </h1>
       <p class="hero-sub">${esc(course.short_description || course.description || '')}</p>
       ${heroWhereHTML(locKeys, upcoming.length)}
+      ${heroHighlightsHTML(outcomes, included)}
       <div class="hero-supplier">
         <span class="supplier-logo">${esc(course.supplier_abbr || '?')}</span>
         <span>Udbydes af <b>${esc(course.supplier_name || 'Futurematch')}</b>${course.rating ? ` · ${(+course.rating).toFixed(1)} ★ fra ${(+course.review_count||0).toLocaleString('da-DK')} kursister` : ''}</span>

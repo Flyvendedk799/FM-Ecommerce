@@ -175,6 +175,17 @@ router.post('/', wrapAsync(async (req, res) => {
     };
   });
 
+  // Fire-and-forget order confirmation. Never let an SMTP hiccup fail a
+  // committed order — the response is already the source of truth.
+  require('../lib/mailer')
+    .sendOrderConfirmation({
+      to: customerEmail,
+      name: customerName,
+      reference: order.reference,
+      totalIncVat: order.total_inc_vat,
+    })
+    .catch((err) => console.error('order confirmation email failed', err));
+
   res.status(201).json({ ok: true, order });
 }));
 

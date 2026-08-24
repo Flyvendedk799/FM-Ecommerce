@@ -91,6 +91,22 @@ router.put('/:id', wrapAsync(async (req, res) => {
       await tx.run('UPDATE bookings SET status = ? WHERE order_id = ?', status, existing.id);
     }
   });
+
+  // Fire-and-forget status e-mail — only on an actual change, never on a no-op save.
+  if (status !== existing.status && (status === 'confirmed' || status === 'cancelled')) {
+    const trackingUrl = `${req.protocol}://${req.get('host')}/MinSide.html` +
+      `?ref=${encodeURIComponent(existing.reference)}&email=${encodeURIComponent(existing.customer_email)}`;
+    require('../lib/mailer')
+      .sendStatusUpdate({
+        to: existing.customer_email,
+        name: existing.customer_name,
+        reference: existing.reference,
+        status,
+        trackingUrl,
+      })
+      .catch((err) => console.error('order status email failed', err));
+  }
+
   res.json({ ok: true });
 }));
 

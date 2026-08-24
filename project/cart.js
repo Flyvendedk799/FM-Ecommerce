@@ -145,6 +145,33 @@
     return d.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
   }
 
+  function toast(message, opts) {
+    opts = opts || {};
+    var old = document.querySelector('.cart-toast');
+    if (old) old.remove();
+    var el = document.createElement('div');
+    el.className = 'cart-toast';
+    var span = document.createElement('span');
+    span.textContent = message;
+    el.appendChild(span);
+    var timer;
+    if (opts.actionLabel && opts.onAction) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cart-toast-action';
+      btn.textContent = opts.actionLabel;
+      btn.addEventListener('click', function () {
+        clearTimeout(timer);
+        el.remove();
+        opts.onAction();
+      });
+      el.appendChild(btn);
+    }
+    document.body.appendChild(el);
+    timer = setTimeout(function () { el.remove(); }, opts.duration || (opts.actionLabel ? 4500 : 2400));
+    return el;
+  }
+
   function updateBadges(items) {
     var count = countParticipants(items || read());
     document.querySelectorAll('[data-cart-count]').forEach(function (el) {
@@ -170,6 +197,7 @@
     formatMoney: formatMoney,
     formatDate: formatDate,
     updateBadges: updateBadges,
+    toast: toast,
   };
 
   document.addEventListener('DOMContentLoaded', function () { updateBadges(); });

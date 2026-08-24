@@ -30,16 +30,24 @@
 
   function reviewHTML(items) {
     return '<div class="checkout-review">' + items.map(function (item) {
-      return '<div class="checkout-review-item">' +
+      return '<div class="checkout-review-item" data-session-id="' + item.session_id + '">' +
         '<strong>' + esc(item.course_title) + '</strong>' +
-        '<span>' + esc(Cart.formatDate(item.date) + ' · ' + item.location + ' · ' + item.participants + ' deltager' + (item.participants === 1 ? '' : 'e')) + '</span>' +
+        '<span>' + esc(Cart.formatDate(item.date) + ' · ' + item.location) + '</span>' +
+        '<div class="cri-controls">' +
+          '<div class="qty-control" aria-label="Antal deltagere">' +
+            '<button type="button" data-qty="-1" aria-label="Færre deltagere">−</button>' +
+            '<input type="number" min="1" max="999" value="' + item.participants + '" data-qty-input aria-label="Antal deltagere">' +
+            '<button type="button" data-qty="1" aria-label="Flere deltagere">+</button>' +
+          '</div>' +
+          '<button type="button" class="cart-remove" data-remove>Fjern</button>' +
+        '</div>' +
       '</div>';
     }).join('') + '</div>';
   }
 
   function summaryHTML(items) {
     var t = Cart.totals(items);
-    return '<aside class="summary-card">' +
+    return '<aside class="summary-card" id="checkout-summary">' +
       '<h2>Ordre</h2>' +
       reviewHTML(items) +
       '<div class="summary-lines">' +
@@ -194,11 +202,58 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  // Editing the order from checkout (qty/remove) only swaps the summary card,
+  // so the already-filled-in contact/billing form is left untouched.
+  function bindSummaryEvents() {
+    var summary = document.getElementById('checkout-summary');
+    if (!summary) return;
+    summary.addEventListener('click', function (e) {
+      var row = e.target.closest('[data-session-id]');
+      if (!row) return;
+      var sessionId = row.getAttribute('data-session-id');
+      if (e.target.matches('[data-remove]')) {
+        var removed = Cart.getItems().find(function (item) { return String(item.session_id) === String(sessionId); });
+        Cart.removeItem(sessionId);
+        updateSummary();
+        if (removed) {
+          Cart.toast('Fjernet: ' + removed.course_title, {
+            actionLabel: 'Fortryd',
+            onAction: function () { Cart.addItem(removed); updateSummary(); },
+          });
+        }
+        return;
+      }
+      if (e.target.matches('[data-qty]')) {
+        var input = row.querySelector('[data-qty-input]');
+        var next = Math.max(1, (parseInt(input.value, 10) || 1) + parseInt(e.target.dataset.qty, 10));
+        Cart.setParticipants(sessionId, next);
+        updateSummary();
+      }
+    });
+    summary.addEventListener('change', function (e) {
+      if (!e.target.matches('[data-qty-input]')) return;
+      var row = e.target.closest('[data-session-id]');
+      Cart.setParticipants(row.getAttribute('data-session-id'), Math.max(1, parseInt(e.target.value, 10) || 1));
+      updateSummary();
+    });
+  }
+
+  function updateSummary() {
+    var items = Cart.getItems();
+    Cart.updateBadges(items);
+    if (!items.length) { render(); return; }
+    var old = document.getElementById('checkout-summary');
+    if (!old) return;
+    old.outerHTML = summaryHTML(items);
+    bindSummaryEvents();
+  }
+
   function render() {
     var items = Cart.getItems();
     Cart.updateBadges(items);
     root.innerHTML = items.length ? formHTML(items) : emptyHTML();
     document.getElementById('checkout-form')?.addEventListener('submit', submitOrder);
+    bindSummaryEvents();
   }
 
   render();

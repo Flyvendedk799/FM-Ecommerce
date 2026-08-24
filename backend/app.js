@@ -132,6 +132,11 @@ app.get('/.image-slots.state.json', (req, res) =>
 app.use('/', express.static(path.join(__dirname, '../project')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../project/Landing.html')));
 
+// Branded 404 for any other GET (bad links, typos) — must follow static + '/'.
+app.get('*', (req, res) => {
+  res.status(404).sendFile(path.join(__dirname, '../project/404.html'));
+});
+
 /* ---- global error handler (LAST) — always JSON, never leak stack ---- */
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   if (err && (err.type === 'entity.parse.failed' || err instanceof SyntaxError)) {

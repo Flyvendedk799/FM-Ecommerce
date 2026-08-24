@@ -6,6 +6,27 @@
   'use strict';
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Short-lived cache so hopping Landing → Kategorier → back doesn't refetch
+  // the whole active-course catalog every time.
+  const COURSES_CACHE_KEY = 'fm_courses_cache_v1';
+  const COURSES_CACHE_TTL = 5 * 60 * 1000;
+  function fetchCoursesCached() {
+    try {
+      var cached = JSON.parse(sessionStorage.getItem(COURSES_CACHE_KEY) || 'null');
+      if (cached && Array.isArray(cached.courses) && Date.now() - cached.at < COURSES_CACHE_TTL) {
+        return Promise.resolve(cached.courses);
+      }
+    } catch (_) { /* ignore corrupt cache */ }
+    return fetch('/api/courses?status=active')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (courses) {
+        if (Array.isArray(courses)) {
+          try { sessionStorage.setItem(COURSES_CACHE_KEY, JSON.stringify({ at: Date.now(), courses: courses })); } catch (_) { /* ignore quota errors */ }
+        }
+        return courses;
+      });
+  }
+
   /* ============ DATA (static fallback — overridden by API) ============ */
   let CATS = {
     ledelse: { label: 'Ledelse & Kommunikation', accent: '#FF5A1F', bg: '#2C1A0A', desc: 'Bliv en stærkere leder, kommunikator og forhandler. Kurser for alle niveauer.', count: 48 },
@@ -27,6 +48,7 @@
   let activeSupplier = 'alle';
   let activeLocation = 'alle';
   let activeSort = 'relevans';
+  let currentHashBase = ''; // category key or 'q=...', without the filter query string
 
   const view = document.getElementById('kat-view');
   const nav  = document.getElementById('nav');
@@ -333,6 +355,46 @@
     activeSort = 'relevans';
   }
 
+  // Filters live in the hash (after the category/search base, joined by '&') so
+  // a refresh, back-button, or shared link keeps whatever was selected.
+  function applyFiltersFromQueryString(qs) {
+    if (!qs) return;
+    var params;
+    try { params = new URLSearchParams(qs); } catch (e) { return; }
+    var format = params.get('format');
+    if (['alle', 'fysisk', 'online'].indexOf(format) >= 0) activeFormat = format;
+    var dur = params.get('dur');
+    if (['alle', '1dag', 'multi'].indexOf(dur) >= 0) activeDur = dur;
+    var availability = params.get('availability');
+    if (['alle', 'datoer', 'snart'].indexOf(availability) >= 0) activeAvailability = availability;
+    var supplier = params.get('supplier');
+    if (supplier) activeSupplier = supplier;
+    var location = params.get('location');
+    if (location) activeLocation = location;
+    var sort = params.get('sort');
+    if (['relevans', 'dato', 'rating', 'pris-asc', 'pris-desc'].indexOf(sort) >= 0) activeSort = sort;
+  }
+
+  function buildFilterQueryString() {
+    var params = new URLSearchParams();
+    if (activeFormat !== 'alle') params.set('format', activeFormat);
+    if (activeDur !== 'alle') params.set('dur', activeDur);
+    if (activeAvailability !== 'alle') params.set('availability', activeAvailability);
+    if (activeSupplier !== 'alle') params.set('supplier', activeSupplier);
+    if (activeLocation !== 'alle') params.set('location', activeLocation);
+    if (activeSort !== 'relevans') params.set('sort', activeSort);
+    return params.toString();
+  }
+
+  // Reflect the current filters in the address bar without triggering a
+  // route()/hashchange re-render (replaceState only touches the URL).
+  function syncHash() {
+    var qs = buildFilterQueryString();
+    var newHash = currentHashBase + (qs ? '&' + qs : '');
+    var target = newHash ? '#' + newHash : (window.location.pathname + window.location.search);
+    if (window.location.hash.slice(1) !== newHash) history.replaceState(null, '', target);
+  }
+
   function bindFilterControls(renderCurrentView) {
     view.querySelectorAll('.f-chip').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -344,6 +406,7 @@
         view.querySelectorAll('[data-filter="' + filter + '"]').forEach(function(b){ b.classList.remove('active'); });
         btn.classList.add('active');
         renderCourseGrid();
+        syncHash();
       });
     });
 
@@ -351,23 +414,27 @@
     if (supplierSel) supplierSel.addEventListener('change', function() {
       activeSupplier = supplierSel.value;
       renderCourseGrid();
+      syncHash();
     });
     var locationSel = document.getElementById('location-sel');
     if (locationSel) locationSel.addEventListener('change', function() {
       activeLocation = locationSel.value;
       renderCourseGrid();
+      syncHash();
     });
 
     var clear = document.getElementById('clear-filters');
     if (clear) clear.addEventListener('click', function() {
       resetFilters();
       renderCurrentView();
+      syncHash();
     });
 
     var sortSel = document.getElementById('sort-sel');
     if (sortSel) sortSel.addEventListener('change', function() {
       activeSort = sortSel.value;
       renderCourseGrid();
+      syncHash();
     });
   }
 
@@ -597,15 +664,20 @@
   /* ============ ROUTING ============ */
   function route() {
     var hash = window.location.hash.slice(1);
+    var sep = hash.indexOf('&');
+    var base = sep >= 0 ? hash.slice(0, sep) : hash;
+    var filterQS = sep >= 0 ? hash.slice(sep + 1) : '';
+    currentHashBase = base;
     resetFilters();
-    if (hash.indexOf('q=') === 0) {
-      var q = decodeURIComponent(hash.slice(2));
+    applyFiltersFromQueryString(filterQS);
+    if (base.indexOf('q=') === 0) {
+      var q = decodeURIComponent(base.slice(2));
       if (q.trim()) renderSearch(q.trim());
       else renderOverview();
       window.scrollTo({ top: 0, behavior: 'auto' });
       return;
     }
-    if (hash && CATS[hash] && visibleCatKeys().indexOf(hash) >= 0) renderCategory(hash);
+    if (base && CATS[base] && visibleCatKeys().indexOf(base) >= 0) renderCategory(base);
     else renderOverview();
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
@@ -642,7 +714,7 @@
   function init() {
     Promise.all([
       fetch('/api/categories').then(function(r) { return r.ok ? r.json() : null; }),
-      fetch('/api/courses?status=active').then(function(r) { return r.ok ? r.json() : null; }),
+      fetchCoursesCached(),
       fetch('/api/sessions').then(function(r) { return r.ok ? r.json() : null; })
     ]).then(function(results) {
       var catsArr   = results[0];

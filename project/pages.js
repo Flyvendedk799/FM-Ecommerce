@@ -109,14 +109,28 @@
 
     var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     var submitBtn = form.querySelector('.fc-submit');
+    var errorEl = document.getElementById('if-error');
+
+    function showError(message) {
+      if (!errorEl) return;
+      errorEl.textContent = message;
+      errorEl.hidden = false;
+      errorEl.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+    }
+
+    function hideError() {
+      if (errorEl) errorEl.hidden = true;
+    }
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      hideError();
 
       var emailEl = document.getElementById('if-email');
       var email = emailEl ? emailEl.value.trim() : '';
       if (!email || !EMAIL_RE.test(email)) {
         if (emailEl) { emailEl.classList.add('invalid'); emailEl.focus(); }
+        showError('Indtast en gyldig e-mail.');
         return;
       }
 
@@ -149,13 +163,13 @@
         .catch(function (err) {
           submitBtn.disabled = false;
           submitBtn.innerHTML = originalHTML;
-          alert('Beskeden kunne ikke sendes: ' + err.message + '\nPrøv igen, eller ring til os på 70 30 01 23.');
+          showError((err.message || 'Beskeden kunne ikke sendes') + '. Prøv igen, eller ring til os på 70 30 01 23.');
         });
     });
 
     // clear invalid state on input
     form.querySelectorAll('.fc-input, .fc-textarea').forEach(function (el) {
-      el.addEventListener('input', function () { el.classList.remove('invalid'); });
+      el.addEventListener('input', function () { el.classList.remove('invalid'); hideError(); });
     });
 
     function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }

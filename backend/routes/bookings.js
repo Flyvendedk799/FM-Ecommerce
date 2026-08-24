@@ -88,7 +88,14 @@ router.post('/', wrapAsync(async (req, res) => {
 }));
 
 router.put('/:id', wrapAsync(async (req, res) => {
-  const existing = await db.get('SELECT * FROM bookings WHERE id=?', req.params.id);
+  const existing = await db.get(`
+    SELECT b.*, c.title AS course_title, o.reference AS order_reference
+    FROM bookings b
+    LEFT JOIN sessions sess ON sess.id = b.session_id
+    LEFT JOIN courses c ON c.id = sess.course_id
+    LEFT JOIN orders o ON o.id = b.order_id
+    WHERE b.id = ?
+  `, req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });
 
   const status       = statusStrict(req.body.status, 'booking', existing.status);
@@ -109,6 +116,25 @@ router.put('/:id', wrapAsync(async (req, res) => {
     await tx.run('UPDATE bookings SET status=?, notes=?, participants=?, payment_method=? WHERE id=?',
       status, notes, participants, payment, req.params.id);
   });
+
+  // Fire-and-forget status e-mail — only on an actual change, never on a no-op save.
+  if (status !== existing.status && (status === 'confirmed' || status === 'cancelled')) {
+    const trackingUrl = existing.order_reference
+      ? `${req.protocol}://${req.get('host')}/MinSide.html` +
+        `?ref=${encodeURIComponent(existing.order_reference)}&email=${encodeURIComponent(existing.customer_email)}`
+      : undefined;
+    require('../lib/mailer')
+      .sendStatusUpdate({
+        to: existing.customer_email,
+        name: existing.customer_name,
+        reference: existing.order_reference || `BK-${existing.id}`,
+        courseTitle: existing.course_title,
+        status,
+        trackingUrl,
+      })
+      .catch((err) => console.error('booking status email failed', err));
+  }
+
   res.json({ ok: true });
 }));
 

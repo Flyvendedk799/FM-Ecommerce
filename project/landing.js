@@ -6,6 +6,27 @@
   'use strict';
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Short-lived cache so hopping Landing → Kategorier → back doesn't refetch
+  // the whole active-course catalog every time.
+  const COURSES_CACHE_KEY = 'fm_courses_cache_v1';
+  const COURSES_CACHE_TTL = 5 * 60 * 1000;
+  function fetchCoursesCached() {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(COURSES_CACHE_KEY) || 'null');
+      if (cached && Array.isArray(cached.courses) && Date.now() - cached.at < COURSES_CACHE_TTL) {
+        return Promise.resolve(cached.courses);
+      }
+    } catch (_) { /* ignore corrupt cache */ }
+    return fetch('/api/courses?status=active')
+      .then(r => r.ok ? r.json() : null)
+      .then(courses => {
+        if (Array.isArray(courses)) {
+          try { sessionStorage.setItem(COURSES_CACHE_KEY, JSON.stringify({ at: Date.now(), courses })); } catch (_) { /* ignore quota errors */ }
+        }
+        return courses;
+      });
+  }
+
   /* ---- nav scrolled ---- */
   const nav = document.getElementById('nav');
   window.addEventListener('scroll', () => {
@@ -181,9 +202,7 @@
   })();
 
   /* ---- live catalog facts + featured courses ---- */
-  const coursesPromise = fetch('/api/courses?status=active')
-    .then(r => r.ok ? r.json() : null)
-    .catch(() => null);
+  const coursesPromise = fetchCoursesCached().catch(() => null);
   const categoriesPromise = fetch('/api/categories')
     .then(r => r.ok ? r.json() : null)
     .catch(() => null);

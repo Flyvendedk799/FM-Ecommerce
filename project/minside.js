@@ -19,6 +19,43 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  // A small styled confirm, replacing window.confirm() to match the rest of
+  // the site's look (and to not block the whole browser tab).
+  function confirmDialog(title, message) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'booking-overlay';
+      var box = document.createElement('div');
+      box.className = 'confirm-box';
+      box.setAttribute('role', 'alertdialog');
+      box.setAttribute('aria-modal', 'true');
+      box.setAttribute('aria-labelledby', 'confirm-box-title');
+      box.innerHTML =
+        '<h3 id="confirm-box-title">' + esc(title) + '</h3>' +
+        '<p>' + esc(message) + '</p>' +
+        '<div class="confirm-actions">' +
+          '<button type="button" class="confirm-cancel-btn">Annuller</button>' +
+          '<button type="button" class="confirm-ok-btn">Bekræft</button>' +
+        '</div>';
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+
+      function cleanup(result) {
+        document.body.style.overflow = '';
+        overlay.remove();
+        document.removeEventListener('keydown', onKeydown);
+        resolve(result);
+      }
+      function onKeydown(e) { if (e.key === 'Escape') cleanup(false); }
+      document.addEventListener('keydown', onKeydown);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) cleanup(false); });
+      box.querySelector('.confirm-cancel-btn').addEventListener('click', function () { cleanup(false); });
+      box.querySelector('.confirm-ok-btn').addEventListener('click', function () { cleanup(true); });
+      box.querySelector('.confirm-ok-btn').focus();
+    });
+  }
+
   var M_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec'];
 
   function parseDate(s) {
@@ -374,10 +411,10 @@
 
     var logout = root.querySelector('[data-logout]');
     if (logout) logout.addEventListener('click', function () {
-      if (window.confirm('Fjern dine ordrer og oplysninger fra denne enhed?')) {
-        Account.logout();
-        render();
-      }
+      confirmDialog('Fjern dine data?', 'Dine ordrer og oplysninger fjernes fra denne enhed. Du kan altid tilføje dem igen med ordrenummer og e-mail.')
+        .then(function (ok) {
+          if (ok) { Account.logout(); render(); }
+        });
     });
   }
 
@@ -402,10 +439,37 @@
     bindAll(account);
   }
 
+  // The confirmation e-mail links back here with ?ref=&email= so a customer
+  // never has to retype their order number to see status. Best-effort: a
+  // failed/missing lookup just leaves the normal manual form in place.
+  function tryAutoLookup(done) {
+    var params = new URLSearchParams(window.location.search);
+    var reference = (params.get('ref') || '').trim();
+    var email = (params.get('email') || '').trim();
+    if (!reference || !email) { done(); return; }
+    var url = new URL(window.location.href);
+    url.searchParams.delete('ref');
+    url.searchParams.delete('email');
+    window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+    fetch('/api/orders/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reference: reference, email: email }),
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) { if (data) Account.addLookedUpOrder(data); })
+      .catch(function () { /* ignore — user can still look it up manually */ })
+      .then(done, done);
+  }
+
   render();
 
-  // pull fresh order statuses once per visit
-  if (Account.isKnown()) {
-    Account.refreshOrders().then(function () { render(); });
-  }
+  tryAutoLookup(function () {
+    // pull fresh order statuses once per visit
+    if (Account.isKnown()) {
+      Account.refreshOrders().then(function () { render(); });
+    } else {
+      render();
+    }
+  });
 })();
